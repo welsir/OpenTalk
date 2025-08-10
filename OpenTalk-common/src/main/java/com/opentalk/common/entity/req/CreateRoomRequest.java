@@ -11,5 +11,7 @@ import lombok.Data;
 public class CreateRoomRequest {
 
     private String roomName;
-    private String createUid;
+    private String ownerName;
+    private String ownerUid;
+    private String roomType;
 }

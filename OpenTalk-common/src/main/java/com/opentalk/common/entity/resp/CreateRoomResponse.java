@@ -1,5 +1,6 @@
 package com.opentalk.common.entity.resp;
 
+import lombok.Builder;
 import lombok.Data;
 
 /**
@@ -8,6 +9,7 @@ import lombok.Data;
  * @date 2025/7/29
  */
 @Data
+@Builder
 public class CreateRoomResponse {
 
     private String roomId;

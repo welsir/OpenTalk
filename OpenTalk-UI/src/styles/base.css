@@ -1,0 +1,113 @@
+/* 基础重置（尽量贴近 Apple 的简洁风格） */
+* { box-sizing: border-box; }
+html, body, #app { height: 100%; }
+body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "PingFang SC", "Segoe UI", Roboto, "Noto Sans CJK SC", "Microsoft YaHei", Helvetica, Arial, sans-serif;
+    background: #f5f5f7;
+    color: #1d1d1f;
+}
+
+a { color: inherit; text-decoration: none; }
+
+.app-shell {
+    display: grid;
+    grid-template-rows: auto 1fr;
+    min-height: 100dvh;
+}
+
+.app-main {
+    width: min(1080px, 100%);
+    margin-inline: auto;
+    padding: 16px clamp(12px, 3vw, 24px);
+}
+
+.container-card {
+    background: #fff;
+    border-radius: 14px;
+    border: 1px solid rgba(0,0,0,0.08);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+}
+hr.separator {
+    margin: 0;
+    border: none;
+    border-top: 1px solid rgba(0,0,0,0.06);
+}
+.input, .button {
+    font: inherit;
+}
+.input {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid rgba(0,0,0,0.12);
+    background: #fff;
+    outline: none;
+    transition: border-color .15s, box-shadow .15s;
+}
+.input:focus {
+    border-color: #0071e3;
+    box-shadow: 0 0 0 4px rgba(0,113,227,0.15);
+}
+.label {
+    font-size: 12px;
+    color: #6e6e73;
+}
+.button {
+    user-select: none;
+    border: none;
+    border-radius: 12px;
+    padding: 10px 14px;
+    cursor: pointer;
+    transition: transform .07s ease, background-color .15s ease, box-shadow .15s ease;
+}
+.button:active { transform: translateY(1px); }
+.button.primary {
+    background: #0071e3;
+    color: #fff;
+    box-shadow: 0 6px 16px rgba(0,113,227,.25);
+}
+.button.secondary {
+    background: #ebebf0;
+    color: #1d1d1f;
+}
+.button.danger {
+    background: #ff3b30;
+    color: #fff;
+}
+.badge {
+    display: inline-block;
+    font-size: 12px;
+    padding: 2px 10px;
+    border-radius: 999px;
+    background: #f2f2f7;
+    color: #6e6e73;
+    border: 1px solid rgba(0,0,0,0.06);
+}
+.grid-2 {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 16px;
+}
+@media (max-width: 960px) {
+    .grid-2 { grid-template-columns: 1fr; }
+}
+.grid-3 {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 16px;
+}
+@media (max-width: 960px) {
+    .grid-3 { grid-template-columns: 1fr; }
+}
+.stack { display: grid; gap: 12px; }
+.flex { display: flex; }
+.flex-1 { flex: 1; }
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.gap-8 { gap: 8px; }
+.gap-12 { gap: 12px; }
+.gap-16 { gap: 16px; }
+.note { color: #6e6e73; font-size: 12px; }
+.card-pad { padding: 16px; }
+.section-title { margin: 6px 0 12px; font-size: 18px; font-weight: 700; }

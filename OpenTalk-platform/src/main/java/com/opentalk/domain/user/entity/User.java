@@ -15,7 +15,7 @@ import java.util.List;
 public class User {
 
     private String id;
-    private String nickName;
+    private String nickname;
     private String password;
     private UserInfo userInfo;
     private UserStatus userStatus;

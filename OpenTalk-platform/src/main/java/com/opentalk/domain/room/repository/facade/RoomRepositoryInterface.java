@@ -1,6 +1,7 @@
 package com.opentalk.domain.room.repository.facade;
 
-import com.opentalk.domain.room.repository.po.RoomPO;
+import com.opentalk.domain.room.entity.GroupRoom;
+import com.opentalk.domain.room.repository.po.GroupRoomPO;
 
 /**
  * @author welsir
@@ -9,8 +10,7 @@ import com.opentalk.domain.room.repository.po.RoomPO;
  */
 public interface RoomRepositoryInterface {
 
-    void createRoom(String roomName);
+    GroupRoomPO findById(String roomId);
 
-    RoomPO findById(String roomId);
-
+    void save(GroupRoom groupRoom);
 }

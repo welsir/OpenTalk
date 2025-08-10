@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 
 import java.time.Duration;
+import java.util.ArrayList;
 
 /**
  * @author welsir
@@ -18,10 +19,27 @@ import java.time.Duration;
 public class GroupRoom extends BaseRoom{
 
     private String groupName;
-    private GroupStatus status;
+    private String status;
     private GroupInfo groupInfo;
     private MemberInfo memberInfo;
+    private final String ownerUid;
+    private String roomType;
 
+    public GroupRoom(String groupName,String ownerUid){
+        this.groupName = groupName;
+        this.ownerUid = ownerUid;
+        super.setMessageId(new ArrayList<>());
+        this.status = GroupStatus.NORMAL;
+    }
+
+    public GroupRoom(String groupName,String ownerUid,GroupInfo groupInfo,MemberInfo memberInfo){
+        this.groupName = groupName;
+        this.ownerUid = ownerUid;
+        super.setMessageId(new ArrayList<>());
+        this.status = GroupStatus.NORMAL;
+        this.groupInfo = groupInfo;
+        this.memberInfo = memberInfo;
+    }
     public void addMember(String uid,String username){
         if(memberInfo.containsMember(uid)){
             log.error("member is exist :{}",uid);
