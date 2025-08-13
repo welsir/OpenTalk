@@ -11,8 +11,8 @@
         />
       </div>
 
-      <div class="user-info">
-        <span class="avatar">{{ userStore.currentUser?.avatar }}</span>
+      <div class="user-info glass-container">
+        <span class="avatar icon-3d">{{ userStore.currentUser?.avatar }}</span>
         <div class="user-details">
           <div class="user-name">{{ userStore.currentUser?.name }}</div>
           <div class="user-status">
@@ -22,35 +22,102 @@
       </div>
     </div>
 
-    <!-- 标签页切换 -->
-    <el-tabs v-model="activeTab" class="sidebar-tabs">
-      <el-tab-pane label="聊天" name="chats">
-        <div class="tab-content">
+    <!-- 标签页切换 - 修改这部分 -->
+    <div class="tab-container acrylic">
+      <div class="tab-buttons">
+        <button
+            :class="['tab-button', { active: activeTab === 'chats' }]"
+            @click="switchToChats"
+        >
+          <el-icon class="icon-3d"><ChatLineRound /></el-icon>
+          <span>聊天</span>
+        </button>
+        <button
+            :class="['tab-button', { active: activeTab === 'rooms' }]"
+            @click="switchToRooms"
+        >
+          <el-icon class="icon-3d"><VideoCamera /></el-icon>
+          <span>房间</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- 内容区域 -->
+    <div class="sidebar-content">
+      <!-- 聊天内容 -->
+      <div v-show="activeTab === 'chats'" class="tab-content">
+        <div class="chat-actions">
           <el-button
               type="primary"
               :icon="Plus"
               @click="showAddFriend = true"
-              class="add-btn"
+              class="action-btn shimmer-effect"
+              round
           >
             添加好友
           </el-button>
+          <el-button
+              type="success"
+              :icon="Plus"
+              @click="showCreateGroup = true"
+              class="action-btn shimmer-effect"
+              round
+          >
+            创建群聊
+          </el-button>
+        </div>
 
+        <!-- 群聊列表 -->
+        <div v-if="chatStore.groups.length > 0" class="chat-section">
+          <div class="section-title">群聊</div>
+          <div class="group-list">
+            <div
+                v-for="group in chatStore.groups"
+                :key="group.id"
+                class="chat-item group-item"
+                :class="{ active: isActiveGroup(group) }"
+                @click="selectGroup(group)"
+            >
+              <span class="chat-avatar icon-3d">{{ group.avatar }}</span>
+              <div class="chat-info">
+                <div class="chat-name">{{ group.name }}</div>
+                <div class="chat-message">{{ group.participants.length }}人</div>
+              </div>
+              <div class="chat-actions-menu">
+                 <el-dropdown @command="(command) => handleGroupAction(command, group)" trigger="click">
+                   <el-button :icon="More" circle size="small" class="menu-btn" />
+                   <template #dropdown>
+                     <el-dropdown-menu>
+                       <el-dropdown-item command="leave" class="danger">
+                       <el-icon class="icon-3d"><More /></el-icon>
+                       退出群聊
+                     </el-dropdown-item>
+                     </el-dropdown-menu>
+                   </template>
+                 </el-dropdown>
+               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 私聊列表 -->
+        <div class="chat-section">
+          <div class="section-title">私聊</div>
           <div v-if="userStore.friends.length === 0" class="empty-state">
             <el-empty description="暂无好友，快去添加吧！" />
           </div>
-
           <div v-else class="friend-list">
             <div
                 v-for="friend in userStore.friends"
                 :key="friend.id"
-                class="friend-item"
-                :class="{ active: chatStore.selectedChat?.id === friend.id }"
+                class="chat-item friend-item"
+                :class="{ active: isActiveFriend(friend) }"
                 @click="selectFriend(friend)"
             >
-              <span class="friend-avatar">{{ friend.avatar }}</span>
-              <div class="friend-info">
-                <div class="friend-name">{{ friend.name }}</div>
-                <div class="friend-message">点击开始聊天</div>
+              <span class="chat-avatar icon-3d">{{ friend.avatar }}</span>
+              <div class="chat-info">
+                <div class="chat-name">{{ friend.name }}</div>
+                <div class="chat-message">点击开始聊天</div>
               </div>
               <el-badge
                   v-if="friend.status === 'online'"
@@ -60,45 +127,44 @@
             </div>
           </div>
         </div>
-      </el-tab-pane>
+      </div>
 
-      <el-tab-pane label="房间" name="rooms">
-        <div class="tab-content">
-          <el-button
-              type="primary"
-              :icon="Plus"
-              @click="createRoom"
-              class="add-btn"
+      <!-- 房间内容 -->
+      <div v-show="activeTab === 'rooms'" class="tab-content">
+        <el-button
+            type="primary"
+            :icon="Plus"
+            @click="createRoom"
+            class="add-btn"
+        >
+          创建房间
+        </el-button>
+
+        <div class="room-list">
+          <div
+              v-for="room in roomStore.rooms"
+              :key="room.id"
+              class="room-item"
+              @click="joinRoom(room)"
           >
-            创建房间
-          </el-button>
-
-          <div class="room-list">
-            <div
-                v-for="room in roomStore.rooms"
-                :key="room.id"
-                class="room-item"
-                @click="joinRoom(room)"
-            >
-              <div class="room-header">
-                <span class="room-name">{{ room.name }}</span>
-                <el-tag
-                    v-if="room.active"
-                    size="small"
-                    type="success"
-                >
-                  进行中
-                </el-tag>
-              </div>
-              <div class="room-info">
-                <span>创建者：{{ room.creator }}</span>
-                <span>{{ room.participants }} 位参与者</span>
-              </div>
+            <div class="room-header">
+              <span class="room-name">{{ room.name }}</span>
+              <el-tag
+                  v-if="room.active"
+                  size="small"
+                  type="success"
+              >
+                进行中
+              </el-tag>
+            </div>
+            <div class="room-info">
+              <span>创建者：{{ room.creator }}</span>
+              <span>{{ room.participants }} 位参与者</span>
             </div>
           </div>
         </div>
-      </el-tab-pane>
-    </el-tabs>
+      </div>
+    </div>
 
     <!-- 底部操作 -->
     <div class="sidebar-footer">
@@ -117,20 +183,24 @@
 
     <!-- 添加好友弹窗 -->
     <AddFriendModal v-model:visible="showAddFriend" />
+    
+    <!-- 创建群聊弹窗 -->
+    <CreateGroupModal v-model:visible="showCreateGroup" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Setting, Plus, SwitchButton } from '@element-plus/icons-vue'
+import { Setting, Plus, SwitchButton, ChatLineRound, VideoCamera, More } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { useChatStore } from '@/stores/chat'
 import { useRoomStore } from '@/stores/room'
 import ProfileModal from '@/components/Modals/ProfileModal.vue'
 import AddFriendModal from '@/components/Modals/AddFriendModal.vue'
-import type { User, Room } from '@/types'
+import CreateGroupModal from '@/components/Modals/CreateGroupModal.vue'
+import type { User, Room, Group } from '@/types'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -140,9 +210,77 @@ const roomStore = useRoomStore()
 const activeTab = ref('chats')
 const showProfile = ref(false)
 const showAddFriend = ref(false)
+const showCreateGroup = ref(false)
+
+// 切换到聊天标签页
+const switchToChats = () => {
+  console.log('Switching to chats tab, current activeTab:', activeTab.value)
+  activeTab.value = 'chats'
+  // 清除房间选中状态
+  if (roomStore.currentRoom) {
+    console.log('Clearing room selection:', roomStore.currentRoom.name)
+    roomStore.currentRoom = null
+  }
+  console.log('After switch - activeTab:', activeTab.value, 'currentRoom:', roomStore.currentRoom)
+}
+
+// 切换到房间标签页
+const switchToRooms = () => {
+  console.log('Switching to rooms tab, current activeTab:', activeTab.value)
+  activeTab.value = 'rooms'
+  // 清除聊天选中状态
+  if (chatStore.selectedChatId) {
+    console.log('Clearing chat selection:', chatStore.selectedChatId)
+    chatStore.selectedChatId = null
+    chatStore.selectedChatType = 'private'
+  }
+  console.log('After switch - activeTab:', activeTab.value, 'selectedChatId:', chatStore.selectedChatId)
+}
 
 const selectFriend = (friend: User) => {
-  chatStore.selectChat(friend)
+  // 生成私聊ID
+  const chatId = `private_${Math.min(userStore.currentUser!.id, friend.id)}_${Math.max(userStore.currentUser!.id, friend.id)}`
+  chatStore.selectChat(chatId, 'private')
+}
+
+const isActiveFriend = (friend: User) => {
+  if (chatStore.selectedChatType !== 'private') return false
+  const chatId = `private_${Math.min(userStore.currentUser!.id, friend.id)}_${Math.max(userStore.currentUser!.id, friend.id)}`
+  return chatStore.selectedChatId === chatId
+}
+
+const selectGroup = (group: Group) => {
+  chatStore.selectChat(group.id, 'group')
+}
+
+const isActiveGroup = (group: Group) => {
+  return chatStore.selectedChatType === 'group' && chatStore.selectedChatId === group.id
+}
+
+const handleGroupAction = async (command: string, group: Group) => {
+  if (command === 'leave') {
+    try {
+      await ElMessageBox.confirm(`确定要退出群聊"${group.name}"吗？`, '提示', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      })
+      
+      const success = chatStore.leaveGroup(group.id)
+      if (success) {
+        ElMessage.success('已退出群聊')
+        // 如果当前选中的是这个群聊，清除选中状态
+        if (chatStore.selectedChatId === group.id) {
+          chatStore.selectedChatId = null
+          chatStore.selectedChatType = 'private'
+        }
+      } else {
+        ElMessage.error('退出群聊失败')
+      }
+    } catch {
+      // 用户取消
+    }
+  }
 }
 
 const createRoom = () => {
@@ -158,7 +296,8 @@ const createRoom = () => {
 }
 
 const joinRoom = (room: Room) => {
-  roomStore.joinRoom(room)
+  roomStore.selectRoom(room)
+  ElMessage.success(`已进入房间：${room.name}`)
 }
 
 const handleLogout = () => {
@@ -176,17 +315,49 @@ const handleLogout = () => {
 
 <style scoped>
 .sidebar {
-  width: 320px;
+  width: 280px;
   height: 100vh;
-  background: white;
-  border-right: 1px solid #e4e7ed;
+  background: #ffffff;
+  border-right: 1px solid #d2d2d7;
   display: flex;
   flex-direction: column;
+  position: relative;
+}
+
+.sidebar::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    radial-gradient(circle at 20% 20%, rgba(120, 119, 198, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(255, 118, 117, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 40% 40%, rgba(0, 122, 255, 0.05) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.sidebar > * {
+  position: relative;
+  z-index: 1;
 }
 
 .sidebar-header {
   padding: 20px;
-  border-bottom: 1px solid #e4e7ed;
+  background: #f5f5f7;
+  border-bottom: 1px solid #e5e5ea;
+}
+
+.sidebar-header::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 24px;
+  right: 24px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.3) 50%, transparent 100%);
 }
 
 .app-title {
@@ -197,22 +368,42 @@ const handleLogout = () => {
 }
 
 .app-title h2 {
-  font-size: 24px;
-  font-weight: bold;
-  color: #303133;
+  font-size: 20px;
+  font-weight: 600;
+  color: #1d1d1f;
+  letter-spacing: -0.2px;
+  margin: 0 0 16px 0;
 }
 
 .user-info {
   display: flex;
   align-items: center;
-  padding: 15px;
-  background: #f5f7fa;
-  border-radius: 12px;
+  padding: 12px;
+  background: #ffffff;
+  border: 1px solid #e5e5ea;
+  border-radius: 8px;
+  transition: border-color 0.15s ease;
+}
+
+.user-info:hover {
+  border-color: #d2d2d7;
 }
 
 .avatar {
-  font-size: 32px;
-  margin-right: 12px;
+  font-size: 40px;
+  margin-right: 16px;
+  filter: 
+    drop-shadow(0 4px 8px rgba(0, 0, 0, 0.15))
+    drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.user-info:hover .avatar {
+  transform: scale(1.1) rotate(5deg);
+  filter: 
+    drop-shadow(0 6px 12px rgba(0, 0, 0, 0.2))
+    drop-shadow(0 3px 6px rgba(0, 0, 0, 0.15));
 }
 
 .user-details {
@@ -220,94 +411,278 @@ const handleLogout = () => {
 }
 
 .user-name {
-  font-weight: 500;
-  color: #303133;
+  font-weight: 600;
+  color: #1a1a1a;
   margin-bottom: 4px;
+  font-size: 16px;
 }
 
-.sidebar-tabs {
-  flex: 1;
+/* 简洁标签页样式 */
+.tab-container {
+  border-bottom: 1px solid #e5e5ea;
+  background: #ffffff;
+}
+
+.tab-buttons {
   display: flex;
-  flex-direction: column;
+  margin: 0;
+  padding: 0;
 }
 
-.sidebar-tabs :deep(.el-tabs__content) {
+.tab-button {
+  flex: 1;
+  padding: 12px 16px;
+  border: none;
+  background: transparent;
+  color: #86868b;
+  font-size: 14px;
+  font-weight: 400;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-bottom: 2px solid transparent;
+}
+
+.tab-button:hover:not(.active) {
+  color: #1d1d1f;
+  background: #f5f5f7;
+}
+
+.tab-button.active {
+  color: #007aff;
+  border-bottom-color: #007aff;
+  background: transparent;
+}
+
+.tab-button .el-icon {
+  font-size: 18px;
+}
+
+/* 内容区域 */
+.sidebar-content {
   flex: 1;
   overflow: hidden;
+  position: relative;
+  background: rgba(248, 249, 250, 0.5);
 }
 
 .tab-content {
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding: 15px;
+  padding: 16px;
+  overflow-y: auto;
 }
 
-.add-btn {
+.chat-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.action-btn {
+  flex: 1;
+  height: 48px;
+  font-weight: 400;
+  background: rgba(0, 122, 255, 0.9) !important;
+  border: 0.5px solid rgba(0, 122, 255, 1) !important;
+  color: white !important;
+  box-shadow: 0 1px 3px rgba(0, 122, 255, 0.3) !important;
+  transition: all 0.2s ease !important;
+  position: relative;
+  overflow: hidden;
+}
+
+.action-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
   width: 100%;
-  margin-bottom: 15px;
+  height: 100%;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.3) 50%, transparent 100%);
+  transition: left 0.6s ease;
+}
+
+.action-btn:hover {
+  background: rgba(0, 122, 255, 1) !important;
+  box-shadow: 0 2px 8px rgba(0, 122, 255, 0.4) !important;
+  transform: translateY(-0.5px);
+}
+
+.action-btn:hover::before {
+  left: 100%;
+}
+
+.action-btn:active {
+  transform: translateY(-1px) scale(0.98);
+}
+
+.chat-section {
+  margin-bottom: 24px;
+}
+
+.section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #8e8e93;
+  margin-bottom: 12px;
+  padding: 0 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .friend-list,
+.group-list,
 .room-list {
   flex: 1;
   overflow-y: auto;
 }
 
-.friend-item {
+.chat-item {
   display: flex;
   align-items: center;
-  padding: 12px;
-  border-radius: 8px;
+  padding: 18px 20px;
+  border-radius: 16px;
   cursor: pointer;
-  transition: background 0.3s;
-  margin-bottom: 8px;
+  transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  margin-bottom: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  position: relative;
+  overflow: hidden;
 }
 
-.friend-item:hover {
-  background: #f5f7fa;
+.chat-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent 0%, rgba(0, 122, 255, 0.1) 50%, transparent 100%);
+  transition: left 0.5s ease;
 }
 
-.friend-item.active {
-  background: #ecf5ff;
+.chat-item:hover {
+  transform: translateX(6px) translateY(-2px);
+  background: 
+    linear-gradient(135deg, rgba(0, 122, 255, 0.12) 0%, rgba(88, 86, 214, 0.08) 100%);
+  border-color: rgba(0, 122, 255, 0.3);
+  box-shadow: 
+    0 8px 24px rgba(0, 122, 255, 0.2),
+    0 4px 8px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
-.friend-avatar {
-  font-size: 28px;
-  margin-right: 12px;
+.chat-item:hover::before {
+  left: 100%;
 }
 
-.friend-info {
+.chat-item.active {
+  background: 
+    linear-gradient(135deg, rgba(0, 122, 255, 0.2) 0%, rgba(88, 86, 214, 0.15) 100%);
+  border-color: rgba(0, 122, 255, 0.4);
+  box-shadow: 
+    0 8px 32px rgba(0, 122, 255, 0.25),
+    0 4px 12px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.05);
+  transform: translateX(8px);
+}
+
+.chat-item.active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 20%;
+  bottom: 20%;
+  width: 4px;
+  background: linear-gradient(180deg, #007aff 0%, #5856d6 100%);
+  border-radius: 0 2px 2px 0;
+  box-shadow: 0 0 8px rgba(0, 122, 255, 0.5);
+}
+
+.chat-avatar {
+  font-size: 36px;
+  margin-right: 16px;
+  filter: 
+    drop-shadow(0 4px 8px rgba(0, 0, 0, 0.15))
+    drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  z-index: 1;
+}
+
+.chat-item:hover .chat-avatar {
+  transform: scale(1.1);
+  filter: 
+    drop-shadow(0 6px 12px rgba(0, 0, 0, 0.2))
+    drop-shadow(0 3px 6px rgba(0, 0, 0, 0.15));
+}
+
+.chat-item.active .chat-avatar {
+  transform: scale(1.05);
+  filter: 
+    drop-shadow(0 4px 12px rgba(0, 122, 255, 0.3))
+    drop-shadow(0 2px 6px rgba(0, 0, 0, 0.15));
+}
+
+.chat-info {
   flex: 1;
+  z-index: 1;
 }
 
-.friend-name {
-  font-weight: 500;
-  color: #303133;
+.chat-name {
+  font-weight: 600;
+  color: #1a1a1a;
   margin-bottom: 4px;
+  font-size: 15px;
 }
 
-.friend-message {
-  font-size: 12px;
-  color: #909399;
+.chat-message {
+  font-size: 13px;
+  color: #8e8e93;
+  font-weight: 400;
 }
 
 .status-badge {
   margin-left: auto;
+  z-index: 1;
+}
+
+.chat-actions-menu {
+  z-index: 1;
+}
+
+.menu-btn {
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.chat-item:hover .menu-btn {
+  opacity: 1;
 }
 
 .room-item {
-  padding: 12px;
-  background: #f5f7fa;
-  border-radius: 8px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 16px;
   cursor: pointer;
-  margin-bottom: 10px;
-  transition: transform 0.3s;
+  margin-bottom: 8px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 .room-item:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  border-color: rgba(0, 122, 255, 0.2);
 }
 
 .room-header {
@@ -318,25 +693,37 @@ const handleLogout = () => {
 }
 
 .room-name {
-  font-weight: 500;
-  color: #303133;
+  font-weight: 600;
+  color: #1a1a1a;
+  font-size: 15px;
 }
 
 .room-info {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 12px;
-  color: #909399;
+  font-size: 13px;
+  color: #8e8e93;
 }
 
 .sidebar-footer {
-  padding: 15px;
-  border-top: 1px solid #e4e7ed;
+  padding: 20px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(20px);
 }
 
 .sidebar-footer .el-button {
   width: 100%;
+  height: 44px;
+  border-radius: 12px;
+  font-weight: 500;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar-footer .el-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(245, 108, 108, 0.3);
 }
 
 .empty-state {
@@ -344,5 +731,6 @@ const handleLogout = () => {
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 40px 20px;
 }
 </style>

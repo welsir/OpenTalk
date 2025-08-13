@@ -204,8 +204,23 @@ function sso(provider) {
   min-height: 100vh;
   display: grid;
   grid-template-columns: 1fr;
-  background: linear-gradient(180deg, #0b1220, #0a0f1a);
-  color: #e5e7eb;
+  background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 25%, #2d2d30 50%, #1a1a1a 75%, #0a0a0a 100%);
+  color: #ffffff;
+  position: relative;
+}
+
+.auth-page::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    radial-gradient(circle at 20% 20%, rgba(255, 215, 0, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(255, 140, 0, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 40% 60%, rgba(255, 215, 0, 0.05) 0%, transparent 50%);
+  pointer-events: none;
 }
 @media (min-width: 960px) {
   .auth-page {
@@ -223,9 +238,10 @@ function sso(provider) {
     position: relative;
     padding: 48px;
     background:
-        radial-gradient(1200px 600px at -10% -20%, rgba(59,130,246,.35), transparent 60%),
-        radial-gradient(1000px 500px at 110% 120%, rgba(16,185,129,.25), transparent 60%),
-        linear-gradient(180deg, #0b1220, #0f172a);
+        radial-gradient(1200px 600px at -10% -20%, rgba(255,215,0,.25), transparent 60%),
+        radial-gradient(1000px 500px at 110% 120%, rgba(255,140,0,.15), transparent 60%),
+        linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #2d2d30 100%);
+    border-right: 1px solid rgba(255, 215, 0, 0.2);
   }
   .brand-content {
     position: sticky;
@@ -245,9 +261,10 @@ function sso(provider) {
     height: 36px;
     display: grid;
     place-items: center;
-    background: linear-gradient(135deg, #2563eb, #9333ea);
+    background: linear-gradient(135deg, #ffd700 0%, #ff8c00 100%);
     border-radius: 12px;
-    box-shadow: 0 10px 30px rgba(37, 99, 235, .35);
+    box-shadow: 0 10px 30px rgba(255, 215, 0, .4);
+    border: 1px solid rgba(255, 215, 0, 0.3);
   }
   .brand-panel h1 {
     margin: 20px 0 12px;
@@ -295,15 +312,20 @@ function sso(provider) {
 }
 
 .card {
-  background: rgba(17, 24, 39, .6);
-  border: 1px solid rgba(148, 163, 184, .18);
-  backdrop-filter: saturate(120%) blur(8px);
+  background: linear-gradient(135deg, rgba(26, 26, 26, 0.9) 0%, rgba(45, 45, 48, 0.8) 100%);
+  border: 1px solid rgba(255, 215, 0, 0.2);
+  backdrop-filter: saturate(120%) blur(12px);
   border-radius: 16px;
-  padding: 28px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, .35);
+  padding: 32px;
+  box-shadow: 
+    0 20px 40px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 215, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
   max-width: 480px;
   width: 100%;
   margin: 0 auto;
+  position: relative;
+  z-index: 1;
 }
 .card h2 {
   font-size: 28px;
@@ -327,17 +349,21 @@ label {
 input[type="email"], input[type="password"], input[type="text"] {
   width: 100%;
   appearance: none;
-  border: 1px solid rgba(148, 163, 184, .25);
-  background: #0b1220;
-  color: #e5e7eb;
+  border: 1px solid rgba(255, 215, 0, 0.3);
+  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d30 100%);
+  color: #ffffff;
   border-radius: 12px;
-  padding: 12px 14px;
+  padding: 14px 16px;
   outline: none;
-  transition: border-color .2s, box-shadow .2s;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 input:focus {
-  border-color: #2563eb;
-  box-shadow: 0 0 0 4px rgba(37, 99, 235, .25);
+  border-color: #ffd700;
+  box-shadow: 
+    0 0 0 4px rgba(255, 215, 0, 0.25),
+    0 4px 12px rgba(255, 215, 0, 0.2);
+  background: linear-gradient(135deg, #2d2d30 0%, #1a1a1a 100%);
 }
 
 .password {
@@ -347,16 +373,20 @@ input:focus {
 }
 .password input { flex: 1; }
 .password .ghost {
-  border: 1px solid rgba(148, 163, 184, .25);
-  background: #0b1220;
-  color: #cbd5e1;
+  border: 1px solid rgba(255, 215, 0, 0.3);
+  background: linear-gradient(135deg, #2d2d30 0%, #1a1a1a 100%);
+  color: #ffffff;
   border-radius: 10px;
-  padding: 8px 10px;
+  padding: 8px 12px;
   cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 .password .ghost:hover {
-  border-color: #94a3b8;
-  color: #fff;
+  border-color: #ffd700;
+  color: #ffd700;
+  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d30 100%);
+  box-shadow: 0 4px 12px rgba(255, 215, 0, 0.2);
 }
 
 .row {
@@ -373,11 +403,16 @@ input:focus {
   font-size: 13px;
 }
 .link {
-  color: #93c5fd;
+  color: #ffd700;
   font-size: 13px;
   text-decoration: none;
+  transition: all 0.3s ease;
 }
-.link:hover { text-decoration: underline; }
+.link:hover { 
+  text-decoration: underline;
+  color: #ffed4e;
+  text-shadow: 0 0 8px rgba(255, 215, 0, 0.5);
+}
 
 /* 按钮 */
 .btn {
@@ -394,20 +429,35 @@ input:focus {
 .btn:active { transform: translateY(1px); }
 .btn.primary {
   width: 100%;
-  background: linear-gradient(180deg, #2563eb, #1d4ed8);
-  color: white;
-  box-shadow: 0 10px 30px rgba(37, 99, 235, .35);
+  background: linear-gradient(135deg, #ffd700 0%, #ff8c00 100%);
+  color: #000000;
+  font-weight: 600;
+  box-shadow: 
+    0 10px 30px rgba(255, 215, 0, 0.4),
+    0 4px 15px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 215, 0, 0.5);
 }
-.btn.primary:hover { filter: brightness(1.07); }
+.btn.primary:hover { 
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+  box-shadow: 
+    0 15px 35px rgba(255, 215, 0, 0.5),
+    0 6px 20px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
 .btn.sso {
   width: 100%;
-  background: #0b1220;
-  color: #e5e7eb;
-  border: 1px solid rgba(148, 163, 184, .25);
+  background: linear-gradient(135deg, #2d2d30 0%, #1a1a1a 100%);
+  color: #ffffff;
+  border: 1px solid rgba(255, 215, 0, 0.3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 .btn.sso:hover {
-  border-color: #94a3b8;
-  color: #fff;
+  border-color: #ffd700;
+  color: #ffd700;
+  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d30 100%);
+  box-shadow: 0 4px 12px rgba(255, 215, 0, 0.2);
 }
 .sso-row {
   display: grid;
@@ -465,10 +515,15 @@ input:focus {
   gap: 12px;
 }
 .foot a {
-  color: #9ec1ff;
+  color: #ffd700;
   text-decoration: none;
+  transition: all 0.3s ease;
 }
-.foot a:hover { text-decoration: underline; }
+.foot a:hover { 
+  text-decoration: underline;
+  color: #ffed4e;
+  text-shadow: 0 0 8px rgba(255, 215, 0, 0.3);
+}
 
 /* 降低动画偏好 */
 @media (prefers-reduced-motion: reduce) {
