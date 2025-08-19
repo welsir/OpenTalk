@@ -8,18 +8,35 @@ import java.time.LocalDateTime;
 
 /**
  * @author welsir
- * @description :
+ * @description : 群组成员状态值对象
  * @date 2025/7/15
  */
 @Data
 public class GroupMemberStatus {
 
     private ChatBan chatBan;
-    private Boolean microphone;
+    private Boolean microphoneBanned;
+    private Boolean cameraBanned;
+    private Boolean isOnline;
+    private LocalDateTime joinTime;
+    private String memberRole; // OWNER, ADMIN, MEMBER
+    
+    public static final String ROLE_OWNER = "OWNER";
+    public static final String ROLE_ADMIN = "ADMIN";
+    public static final String ROLE_MEMBER = "MEMBER";
 
     public GroupMemberStatus() {
         this.chatBan = new ChatBan();
-        microphone = false;
+        this.microphoneBanned = false;
+        this.cameraBanned = false;
+        this.isOnline = false;
+        this.joinTime = LocalDateTime.now();
+        this.memberRole = ROLE_MEMBER;
+    }
+    
+    public GroupMemberStatus(String role) {
+        this();
+        this.memberRole = role;
     }
 
     public void banChat(LocalDateTime start, LocalDateTime end) {
@@ -35,15 +52,51 @@ public class GroupMemberStatus {
     }
 
     public void banMicrophone() {
-        microphone = true;
+        this.microphoneBanned = true;
     }
 
     public void unbanMicrophone() {
-        microphone = false;
+        this.microphoneBanned = false;
     }
 
     public boolean isBannedMicrophone() {
-        return microphone;
+        return this.microphoneBanned;
+    }
+    
+    public void banCamera() {
+        this.cameraBanned = true;
+    }
+    
+    public void unbanCamera() {
+        this.cameraBanned = false;
+    }
+    
+    public boolean isBannedCamera() {
+        return this.cameraBanned;
+    }
+    
+    public void setOnline(boolean online) {
+        this.isOnline = online;
+    }
+    
+    public boolean isOwner() {
+        return ROLE_OWNER.equals(this.memberRole);
+    }
+    
+    public boolean isAdmin() {
+        return ROLE_ADMIN.equals(this.memberRole);
+    }
+    
+    public void promoteToAdmin() {
+        if (!isOwner()) {
+            this.memberRole = ROLE_ADMIN;
+        }
+    }
+    
+    public void demoteToMember() {
+        if (!isOwner()) {
+            this.memberRole = ROLE_MEMBER;
+        }
     }
 
     @Setter
