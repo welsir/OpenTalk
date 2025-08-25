@@ -504,33 +504,23 @@ const handleSubmit = async () => {
   try {
     if (isRegister.value) {
       // 注册逻辑
-      const success = userStore.register(
-        formData.username,
-        formData.password,
-        formData.name,
-        formData.email
-      )
+      await userStore.register({
+        username: formData.username,
+        password: formData.password,
+        nickname: formData.name,
+        email: formData.email
+      })
       
-      if (success) {
-        ElMessage.success('注册成功！')
-        // 注册成功后自动登录
-        const loginSuccess = userStore.login(formData.username, formData.password)
-        if (loginSuccess) {
-          await router.push('/main')
-        }
-      } else {
-        ElMessage.error('注册失败，用户名可能已存在')
-      }
+      ElMessage.success('注册成功！')
+      // 注册成功后自动登录
+      await userStore.login(formData.username, formData.password)
+      ElMessage.success('登录成功！')
+      await router.push('/main')
     } else {
       // 登录逻辑
-      const success = userStore.login(formData.username, formData.password)
-      
-      if (success) {
-        ElMessage.success('登录成功！')
-        await router.push('/main')
-      } else {
-        ElMessage.error('登录失败，请检查用户名和密码')
-      }
+      await userStore.login(formData.username, formData.password)
+      ElMessage.success('登录成功！')
+      await router.push('/main')
     }
   } catch (error) {
     console.error('Login error:', error)

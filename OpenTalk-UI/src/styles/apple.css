@@ -664,3 +664,53 @@ body {
 .z-20 { z-index: 20; }
 .z-50 { z-index: 50; }
 .z-100 { z-index: 100; }
+
+/* 深色模式支持 */
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* 背景色 - 深色模式 */
+    --bg-primary: #1C1C1E;
+    --bg-secondary: #2C2C2E;
+    --bg-tertiary: #3A3A3C;
+    --bg-overlay: rgba(0, 0, 0, 0.6);
+    
+    /* 文字颜色 - 深色模式 */
+    --text-primary: #FFFFFF;
+    --text-secondary: #AEAEB2;
+    --text-tertiary: #8E8E93;
+    --text-inverse: #1C1C1E;
+    
+    /* 边框 - 深色模式 */
+    --border-color: rgba(255, 255, 255, 0.1);
+    --border-light: rgba(255, 255, 255, 0.05);
+    
+    /* 中性色调整 */
+    --color-gray-100: #3A3A3C;
+    --color-gray-200: #48484A;
+    --color-gray-300: #636366;
+  }
+}
+
+/* 手动深色模式类 */
+[data-theme="dark"] {
+  /* 背景色 - 深色模式 */
+  --bg-primary: #1C1C1E;
+  --bg-secondary: #2C2C2E;
+  --bg-tertiary: #3A3A3C;
+  --bg-overlay: rgba(0, 0, 0, 0.6);
+  
+  /* 文字颜色 - 深色模式 */
+  --text-primary: #FFFFFF;
+  --text-secondary: #AEAEB2;
+  --text-tertiary: #8E8E93;
+  --text-inverse: #1C1C1E;
+  
+  /* 边框 - 深色模式 */
+  --border-color: rgba(255, 255, 255, 0.1);
+  --border-light: rgba(255, 255, 255, 0.05);
+  
+  /* 中性色调整 */
+  --color-gray-100: #3A3A3C;
+  --color-gray-200: #48484A;
+  --color-gray-300: #636366;
+}

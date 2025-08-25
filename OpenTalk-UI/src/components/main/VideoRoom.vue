@@ -15,49 +15,34 @@
       </div>
     </div>
 
-    <!-- 视频区域 -->
-    <div class="video-grid">
-      <div class="video-item">
-        <div class="video-placeholder">
-          <span class="video-avatar">👤</span>
-          <p>参与者 1</p>
-        </div>
-      </div>
-
-      <div class="video-item">
-        <div class="video-placeholder">
-          <span class="video-avatar">{{ userStore.currentUser?.avatar }}</span>
-          <p>{{ userStore.currentUser?.name }} (您)</p>
-        </div>
-      </div>
-    </div>
+    <!-- 视频网格 -->
+    <VideoGrid
+        :local-stream="roomStore.localStream"
+        :participants="roomStore.participants"
+        :screen-share-stream="roomStore.screenShareStream"
+        :screen-share-user="screenShareUser"
+        :current-user="userStore.currentUser"
+        :is-mic-on="roomStore.isMicOn"
+        :is-camera-on="roomStore.isVideoOn"
+        @toggle-camera="roomStore.toggleVideo"
+    />
 
     <!-- 控制栏 -->
-    <div class="control-bar">
-      <el-button
-          :type="roomStore.isMicOn ? 'default' : 'danger'"
-          :icon="roomStore.isMicOn ? Microphone : Mute"
-          circle
-          size="large"
-          @click="roomStore.toggleMic()"
-      />
-
-      <el-button
-          :type="roomStore.isVideoOn ? 'default' : 'danger'"
-          :icon="roomStore.isVideoOn ? VideoCamera : VideoCameraFilled"
-          circle
-          size="large"
-          @click="roomStore.toggleVideo()"
-      />
-
-      <el-button
-          type="danger"
-          :icon="PhoneFilled"
-          circle
-          size="large"
-          @click="leaveRoom"
-      />
-    </div>
+    <VideoControls
+        :is-mic-on="roomStore.isMicOn"
+        :is-camera-on="roomStore.isVideoOn"
+        :is-screen-sharing="roomStore.isScreenSharing"
+        :is-chat-visible="isChatVisible"
+        :call-duration="callDuration"
+        @toggle-mic="roomStore.toggleMic"
+        @toggle-camera="roomStore.toggleVideo"
+        @toggle-screen-share="roomStore.toggleScreenShare"
+        @toggle-chat="toggleChat"
+        @end-call="leaveRoom"
+        @open-device-settings="openDeviceSettings"
+        @open-audio-settings="openAudioSettings"
+        @open-general-settings="openGeneralSettings"
+    />
 
     <!-- 侧边聊天栏 -->
     <div class="room-chat">
@@ -89,28 +74,64 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import {
-  ArrowLeft,
-  Microphone,
-  Mute,
-  VideoCamera,
-  VideoCameraFilled,
-  PhoneFilled,
-  Promotion
-} from '@element-plus/icons-vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useRoomStore } from '@/stores/room'
 import { useUserStore } from '@/stores/user'
+import { ArrowLeft, ChatLineRound } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+import VideoGrid from '@/components/video/VideoGrid.vue'
+import VideoControls from '@/components/video/VideoControls.vue'
 
+const router = useRouter()
 const roomStore = useRoomStore()
 const userStore = useUserStore()
 
+const isChatVisible = ref(false)
+const callDuration = ref(0)
+const callTimer = ref<number>()
 const chatMessage = ref('')
 
-const leaveRoom = () => {
-  roomStore.leaveRoom()
-  ElMessage.info('已离开房间')
+const currentRoom = computed(() => roomStore.currentRoom)
+
+const screenShareUser = computed(() => {
+  // 找到正在共享屏幕的用户
+  return roomStore.participants.find(p => p.isScreenSharing) || 
+         (roomStore.isScreenSharing ? userStore.currentUser : null)
+})
+
+const leaveRoom = async () => {
+  try {
+    await roomStore.leaveRoom()
+    ElMessage.success('已离开房间')
+    router.push('/main')
+  } catch (error) {
+    console.error('离开房间失败:', error)
+    ElMessage.error('离开房间失败')
+  }
+}
+
+const toggleChat = () => {
+  isChatVisible.value = !isChatVisible.value
+}
+
+const goBack = () => {
+  router.push('/main')
+}
+
+const openDeviceSettings = () => {
+  // TODO: 打开设备设置
+  ElMessage.info('设备设置功能开发中...')
+}
+
+const openAudioSettings = () => {
+  // TODO: 打开音频设置
+  ElMessage.info('音频设置功能开发中...')
+}
+
+const openGeneralSettings = () => {
+  // TODO: 打开通用设置
+  ElMessage.info('通用设置功能开发中...')
 }
 
 const sendChatMessage = () => {
@@ -120,6 +141,37 @@ const sendChatMessage = () => {
     chatMessage.value = ''
   }
 }
+
+// 开始计时
+const startCallTimer = () => {
+  callTimer.value = setInterval(() => {
+    callDuration.value++
+  }, 1000)
+}
+
+// 停止计时
+const stopCallTimer = () => {
+  if (callTimer.value) {
+    clearInterval(callTimer.value)
+    callTimer.value = undefined
+  }
+}
+
+onMounted(async () => {
+  try {
+    await roomStore.initializeMedia()
+    startCallTimer()
+  } catch (error) {
+    console.error('初始化媒体失败:', error)
+    ElMessage.error('无法访问摄像头或麦克风')
+  }
+})
+
+onUnmounted(() => {
+  stopCallTimer()
+  // 清理资源
+  roomStore.cleanup()
+})
 </script>
 
 <style scoped>

@@ -1,434 +1,188 @@
 <template>
   <div class="chat-area">
-    <template v-if="chatStore.selectedChat && chatStore.selectedChat.isGroup">
+    <template v-if="currentChat && currentChat.isGroup">
       <!-- 聊天头部 -->
-      <div class="chat-header">
-        <div class="chat-user-info">
-          <span class="chat-avatar icon-3d">{{ chatStore.selectedChat.avatar }}</span>
-          <div class="chat-user-details">
-            <div class="chat-user-name">{{ chatStore.selectedChat.name }}</div>
-            <div class="chat-user-status">
-              {{ chatStore.selectedChat.status === 'online' ? '在线' : '离线' }}
-            </div>
-          </div>
-        </div>
-
-        <div class="chat-actions">
-          <el-button :icon="Phone" circle class="glass-container" />
-          <el-button :icon="VideoCamera" circle class="glass-container" />
-          <el-dropdown @command="handleGroupMenuCommand">
-            <el-button>
-              <el-icon><More /></el-icon>
-            </el-button>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item command="groupInfo">群聊信息</el-dropdown-item>
-                <el-dropdown-item command="editGroupName">修改群名称</el-dropdown-item>
-                <el-dropdown-item command="groupAnnouncement">群公告</el-dropdown-item>
-                <el-dropdown-item command="groupMembers">群成员管理</el-dropdown-item>
-                <el-dropdown-item divided command="muteGroup">消息免打扰</el-dropdown-item>
-                <el-dropdown-item command="leaveGroup" class="danger">退出群聊</el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
-        </div>
-      </div>
+      <ChatHeader
+          :chat="currentChat"
+          @call="startAudioCall"
+          @videoCall="startVideoCall"
+          @menuAction="handleGroupMenuCommand"
+      />
 
       <!-- 消息区域 -->
-      <div class="chat-messages" ref="messagesContainer">
-        <div
-            v-for="message in messages"
-            :key="message.id"
-            class="message-item"
-            :class="{ 'message-own': isOwnMessage(message) }"
-        >
-          <div class="message-bubble">
-            <div class="message-content">{{ message.content }}</div>
-            <div class="message-time">{{ message.time }}</div>
-          </div>
-        </div>
-      </div>
+      <MessageList
+          :messages="messages"
+          :current-user-id="userStore.currentUser?.id"
+          :typing-users="typingUsers"
+          :show-sender-name="currentChat.isGroup"
+          @reaction-click="handleReactionClick"
+          @message-click="handleMessageClick"
+          ref="messageListRef"
+      />
 
       <!-- 输入区域 -->
-      <div class="chat-input">
-        <!-- 工具栏 -->
-        <div class="input-toolbar">
-          <el-button
-              :icon="Picture"
-              circle
-              size="small"
-              @click="selectImage"
-              title="发送图片"
-              class="acrylic"
-          />
-          <el-button
-              :icon="Paperclip"
-              circle
-              size="small"
-              @click="selectFile"
-              title="发送文件"
-              class="acrylic"
-          />
-          <el-button
-              :icon="Microphone"
-              circle
-              size="small"
-              @click="toggleVoiceRecord"
-              :type="isRecording ? 'danger' : 'default'"
-              :title="isRecording ? '停止录音' : '语音消息'"
-              class="acrylic"
-          />
-          <el-popover
-              placement="top"
-              width="300"
-              trigger="click"
-          >
-            <template #reference>
-              <el-button
-                  circle
-                  size="small"
-                  title="表情"
-                  class="acrylic"
-              >
-                😊
-              </el-button>
-            </template>
-            <div class="emoji-picker">
-              <span
-                  v-for="emoji in commonEmojis"
-                  :key="emoji"
-                  class="emoji-item"
-                  @click="insertEmoji(emoji)"
-              >
-                {{ emoji }}
-              </span>
-            </div>
-          </el-popover>
-        </div>
-        
-        <!-- 输入框 -->
-        <div class="input-container">
-          <el-input
-              v-model="inputMessage"
-              type="textarea"
-              :rows="1"
-              :autosize="{ minRows: 1, maxRows: 4 }"
-              placeholder="输入消息..."
-              @keydown="handleKeyDown"
-              class="input-field"
-          />
-          <el-button
-              type="primary"
-              :icon="Promotion"
-              @click="sendMessage"
-              :disabled="!inputMessage.trim() && !selectedFiles.length"
-              class="send-button shimmer-effect"
-          >
-            发送
-          </el-button>
-        </div>
-        
-        <!-- 文件预览 -->
-        <div v-if="selectedFiles.length" class="file-preview">
-          <div
-              v-for="(file, index) in selectedFiles"
-              :key="index"
-              class="file-item"
-          >
-            <el-image
-                v-if="file.type.startsWith('image/')"
-                :src="file.preview"
-                class="image-preview"
-                fit="cover"
-            />
-            <div v-else class="file-info">
-              <el-icon><Document /></el-icon>
-              <span>{{ file.name }}</span>
-            </div>
-            <el-button
-                :icon="Close"
-                circle
-                size="small"
-                @click="removeFile(index)"
-                class="remove-file pulse-effect"
-            />
-          </div>
-        </div>
-      </div>
+      <MessageInput
+          @sendMessage="handleSendMessage"
+          @sendVoice="handleSendVoice"
+          @sendFile="handleSendFile"
+          @typing-start="handleTypingStart"
+          @typing-stop="handleTypingStop"
+      />
     </template>
 
     <!-- 空状态 -->
     <div v-else class="empty-chat">
-      <el-empty description="选择一个好友开始聊天">
-        <template #image>
-          <el-icon :size="100" color="#c0c4cc">
-            <ChatLineRound />
-          </el-icon>
-        </template>
-      </el-empty>
+      <div class="empty-content">
+        <el-icon :size="80" color="#c0c4cc">
+          <ChatLineRound />
+        </el-icon>
+        <h3 class="empty-title">选择一个聊天开始对话</h3>
+        <p class="empty-description">从左侧选择好友或群组，开始愉快的聊天吧！</p>
+        <div class="empty-tips">
+          <div class="tip-item">
+            <el-icon color="#409eff"><ChatLineRound /></el-icon>
+            <span>💬 发送文字、图片、文件</span>
+          </div>
+          <div class="tip-item">
+            <el-icon color="#67c23a"><ChatLineRound /></el-icon>
+            <span>🎤 语音消息和通话</span>
+          </div>
+          <div class="tip-item">
+            <el-icon color="#e6a23c"><ChatLineRound /></el-icon>
+            <span>👥 创建群聊，多人协作</span>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, watch } from 'vue'
-import { 
-  Phone, 
-  VideoCamera, 
-  Promotion, 
-  ChatLineRound, 
-  Picture,
-  More, 
-  Paperclip, 
-  Microphone, 
-  Document, 
-  Close 
-} from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { ref, computed } from 'vue'
+import { ChatLineRound } from '@element-plus/icons-vue'
 import { useChatStore } from '@/stores/chat'
 import { useUserStore } from '@/stores/user'
-import { useRoomStore } from '@/stores/room'
+import { useInteractionStore } from '@/stores/interaction'
+import ChatHeader from '@/components/chat/ChatHeader.vue'
+import MessageList from '@/components/chat/MessageList.vue'
+import MessageInput from '@/components/chat/MessageInput.vue'
+import { ElMessage } from 'element-plus'
 import type { Message } from '@/types'
 
 const chatStore = useChatStore()
 const userStore = useUserStore()
-const roomStore = useRoomStore()
+const interactionStore = useInteractionStore()
+const messageListRef = ref()
 
-const inputMessage = ref('')
-const messagesContainer = ref<HTMLElement>()
-const selectedFiles = ref<File[]>([])
-const isRecording = ref(false)
-const mediaRecorder = ref<MediaRecorder | null>(null)
-
-// 常用表情
-const commonEmojis = [
-  '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣',
-  '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰',
-  '😘', '😗', '😙', '😚', '😋', '😛', '😝', '😜',
-  '🤪', '🤨', '🧐', '🤓', '😎', '🤩', '🥳', '😏',
-  '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣',
-  '😖', '😫', '😩', '🥺', '😢', '😭', '😤', '😠',
-  '😡', '🤬', '🤯', '😳', '🥵', '🥶', '😱', '😨',
-  '👍', '👎', '👌', '✌️', '🤞', '🤟', '🤘', '🤙',
-  '👏', '🙌', '👐', '🤲', '🤝', '🙏', '❤️', '🧡',
-  '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔'
-]
+const currentChat = computed(() => chatStore.currentChat)
 
 const messages = computed(() => {
-  if (!chatStore.selectedChatId) return []
   return chatStore.currentMessages
 })
 
-const currentChat = computed(() => {
-  return chatStore.currentChat
+const typingUsers = computed(() => {
+  if (!chatStore.selectedChatId) return []
+  const userIds = chatStore.typingUsers[chatStore.selectedChatId] || []
+  return userIds.map(userId => ({
+    userId,
+    userName: userStore.getUserById(userId)?.nickname || '未知用户'
+  }))
 })
 
-const isOwnMessage = (message: Message) => {
-  return message.senderId === userStore.currentUser?.id
-}
-
-const handleKeyDown = (event: KeyboardEvent) => {
-  if (event.key === 'Enter' && !event.shiftKey) {
-    event.preventDefault()
-    sendMessage()
-  }
-}
-
-const sendMessage = () => {
-  if ((!inputMessage.value.trim() && !selectedFiles.value.length) || !chatStore.selectedChatId) return
-
-  // 发送文本消息
-  if (inputMessage.value.trim()) {
-    chatStore.sendMessage(inputMessage.value.trim())
-    inputMessage.value = ''
-  }
-
-  // 发送文件
-  if (selectedFiles.value.length) {
-    selectedFiles.value.forEach(file => {
-      const fileType = file.type.startsWith('image/') ? 'image' : 'file'
-      chatStore.sendMessage(`[${fileType.toUpperCase()}] ${file.name}`, fileType as any, file)
-    })
-    selectedFiles.value = []
-  }
-
-  scrollToBottom()
-}
-
-const selectImage = () => {
-  const input = document.createElement('input')
-  input.type = 'file'
-  input.accept = 'image/*'
-  input.multiple = true
-  input.onchange = (e) => {
-    const files = (e.target as HTMLInputElement).files
-    if (files) {
-      handleFileSelect(Array.from(files))
-    }
-  }
-  input.click()
-}
-
-const selectFile = () => {
-  const input = document.createElement('input')
-  input.type = 'file'
-  input.multiple = true
-  input.onchange = (e) => {
-    const files = (e.target as HTMLInputElement).files
-    if (files) {
-      handleFileSelect(Array.from(files))
-    }
-  }
-  input.click()
-}
-
-const handleFileSelect = (files: File[]) => {
-  files.forEach(file => {
-    if (file.size > 10 * 1024 * 1024) { // 10MB limit
-      ElMessage.warning(`文件 ${file.name} 超过10MB限制`)
-      return
-    }
-    
-    const fileWithPreview = file as File & { preview?: string }
-    
-    if (file.type.startsWith('image/')) {
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        fileWithPreview.preview = e.target?.result as string
-      }
-      reader.readAsDataURL(file)
-    }
-    
-    selectedFiles.value.push(fileWithPreview)
-  })
-}
-
-const removeFile = (index: number) => {
-  selectedFiles.value.splice(index, 1)
-}
-
-const insertEmoji = (emoji: string) => {
-  inputMessage.value += emoji
-}
-
-const toggleVoiceRecord = async () => {
-  if (isRecording.value) {
-    stopRecording()
-  } else {
-    startRecording()
-  }
-}
-
-const startRecording = async () => {
+const handleSendMessage = async (content: string, files?: any[]) => {
+  if (!content.trim() && !files?.length) return
+  
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-    mediaRecorder.value = new MediaRecorder(stream)
-    
-    const chunks: Blob[] = []
-    
-    mediaRecorder.value.ondataavailable = (e) => {
-      chunks.push(e.data)
+    // 发送文本消息
+    if (content.trim()) {
+      await chatStore.sendMessage(content, 'text')
     }
     
-    mediaRecorder.value.onstop = () => {
-      const blob = new Blob(chunks, { type: 'audio/wav' })
-      const file = new File([blob], `voice_${Date.now()}.wav`, { type: 'audio/wav' })
-      chatStore.sendMessage('[语音消息]', 'audio', file)
-      
-      // 停止所有音频轨道
-      stream.getTracks().forEach(track => track.stop())
+    // 发送文件消息
+    if (files?.length) {
+      for (const file of files) {
+        const fileType = file.type.startsWith('image/') ? 'image' : 'file'
+        await chatStore.sendMessage(file.name, fileType, file)
+      }
     }
     
-    mediaRecorder.value.start()
-    isRecording.value = true
-    ElMessage.info('开始录音...')
+    // 发送后滚动到底部
+    setTimeout(() => {
+      messageListRef.value?.scrollToBottom()
+    }, 100)
   } catch (error) {
-    console.error('录音失败:', error)
-    ElMessage.error('无法访问麦克风')
+    console.error('发送消息失败:', error)
   }
 }
 
-const stopRecording = () => {
-  if (mediaRecorder.value && isRecording.value) {
-    mediaRecorder.value.stop()
-    isRecording.value = false
-    ElMessage.success('录音完成')
+const handleSendVoice = async (audioBlob: Blob) => {
+  try {
+    await chatStore.sendMessage('语音消息', 'audio', audioBlob)
+    setTimeout(() => {
+      messageListRef.value?.scrollToBottom()
+    }, 100)
+  } catch (error) {
+    console.error('发送语音消息失败:', error)
   }
 }
 
-const startVideoCall = () => {
-  if (!currentChat.value) return
-  
-  // 创建视频通话房间
-  const room = roomStore.createRoom(
-    `与 ${currentChat.value.name} 的视频通话`,
-    '视频通话',
-    true
-  )
-  
-  if (room) {
-    roomStore.joinRoom(room.id)
-    ElMessage.success('视频通话已发起')
+const handleSendFile = async (files: any[]) => {
+  try {
+    for (const file of files) {
+      const fileType = file.type.startsWith('image/') ? 'image' : 'file'
+      await chatStore.sendMessage(file.name, fileType, file)
+    }
+    setTimeout(() => {
+      messageListRef.value?.scrollToBottom()
+    }, 100)
+  } catch (error) {
+    console.error('发送文件失败:', error)
   }
 }
 
 const startAudioCall = () => {
-  if (!currentChat.value) return
-  
-  // 创建语音通话房间
-  const room = roomStore.createRoom(
-    `与 ${currentChat.value.name} 的语音通话`,
-    '语音通话',
-    true
-  )
-  
-  if (room) {
-    roomStore.joinRoom(room.id)
-    ElMessage.success('语音通话已发起')
-  }
+  // TODO: 开始语音通话
+  console.log('开始语音通话')
 }
 
-// 处理群聊菜单命令
+const startVideoCall = () => {
+  // TODO: 开始视频通话
+  console.log('开始视频通话')
+}
+
 const handleGroupMenuCommand = (command: string) => {
-  switch (command) {
-    case 'groupInfo':
-      ElMessage.info('群聊信息功能开发中...')
-      break
-    case 'editGroupName':
-      ElMessage.info('修改群名称功能开发中...')
-      break
-    case 'groupAnnouncement':
-      ElMessage.info('群公告功能开发中...')
-      break
-    case 'groupMembers':
-      ElMessage.info('群成员管理功能开发中...')
-      break
-    case 'muteGroup':
-      ElMessage.info('消息免打扰功能开发中...')
-      break
-    case 'leaveGroup':
-      ElMessage.warning('退出群聊功能开发中...')
-      break
-    default:
-      break
+  console.log('群聊菜单命令:', command)
+  // TODO: 处理群聊菜单命令
+}
+
+const handleTypingStart = () => {
+  if (chatStore.selectedChatId && userStore.currentUser) {
+    interactionStore.setTypingStatus(chatStore.selectedChatId, userStore.currentUser.id, true)
   }
 }
 
-const scrollToBottom = () => {
-  nextTick(() => {
-    if (messagesContainer.value) {
-      messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
-    }
-  })
+const handleTypingStop = () => {
+  if (chatStore.selectedChatId && userStore.currentUser) {
+    interactionStore.setTypingStatus(chatStore.selectedChatId, userStore.currentUser.id, false)
+  }
 }
 
-watch(() => chatStore.selectedChatId, () => {
-  scrollToBottom()
-})
+const handleReactionClick = (messageId: string, emoji: string) => {
+  if (!userStore.currentUser) return
+  
+  try {
+    interactionStore.toggleReaction(messageId, userStore.currentUser.id, emoji)
+    ElMessage.success('反应已添加')
+  } catch (error) {
+    ElMessage.error('添加反应失败')
+    console.error('添加反应失败:', error)
+  }
+}
 
-watch(() => messages.value.length, () => {
-  scrollToBottom()
-})
+const handleMessageClick = (message: Message) => {
+  console.log('消息被点击:', message)
+  // TODO: 处理消息点击，比如显示消息详情、复制消息等
+}
 </script>
 
 <style scoped>
@@ -437,18 +191,25 @@ watch(() => messages.value.length, () => {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d30 100%);
+  background: var(--bg-gradient-light);
   position: relative;
+  font-family: var(--font-primary);
+  transition: all var(--duration-300) var(--ease-out);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .chat-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 24px;
-  background: linear-gradient(135deg, #2a2a2a 0%, #333333 100%);
-  border-bottom: 1px solid #444444;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  padding: var(--space-4) var(--space-6);
+  background: var(--glass-bg);
+  border-bottom: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  transition: all var(--duration-200) var(--ease-out);
 }
 
 
@@ -483,17 +244,19 @@ watch(() => messages.value.length, () => {
 }
 
 .chat-user-name {
-  font-weight: 600;
-  color: #ffffff;
-  margin-bottom: 4px;
-  font-size: 18px;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  font-weight: var(--font-semibold);
+  color: var(--color-neutral-900);
+  margin-bottom: var(--space-1);
+  font-size: var(--text-xl);
+  font-family: var(--font-display);
+  letter-spacing: -0.025em;
 }
 
 .chat-user-status {
-  font-size: 13px;
-  color: #cccccc;
-  font-weight: 500;
+  font-size: var(--text-sm);
+  color: var(--color-neutral-500);
+  font-weight: var(--font-medium);
+  letter-spacing: 0.01em;
 }
 
 .chat-actions {
@@ -890,5 +653,57 @@ watch(() => messages.value.length, () => {
   align-items: center;
   justify-content: center;
   padding: 60px 40px;
+}
+
+.empty-content {
+  text-align: center;
+  max-width: 400px;
+  padding: 2rem;
+}
+
+.empty-title {
+  margin: var(--space-6) 0 var(--space-2);
+  color: var(--color-neutral-800);
+  font-size: var(--text-2xl);
+  font-weight: var(--font-semibold);
+  font-family: var(--font-display);
+  letter-spacing: -0.025em;
+}
+
+.empty-description {
+  margin: 0 0 var(--space-8);
+  color: var(--color-neutral-600);
+  font-size: var(--text-base);
+  line-height: var(--leading-relaxed);
+  font-weight: var(--font-normal);
+}
+
+.empty-tips {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  text-align: left;
+}
+
+.tip-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: linear-gradient(135deg, #2a2a2a 0%, #333333 100%);
+  border-radius: 8px;
+  border: 1px solid #444444;
+  transition: all 0.2s ease;
+}
+
+.tip-item:hover {
+  background: linear-gradient(135deg, #333333 0%, #444444 100%);
+  border-color: #555555;
+  transform: translateY(-1px);
+}
+
+.tip-item span {
+  color: #e5e5e7;
+  font-size: 0.875rem;
 }
 </style>

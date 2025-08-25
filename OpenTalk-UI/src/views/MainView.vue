@@ -35,7 +35,7 @@
     <!-- 中间会话列表 -->
     <div class="chat-list" :style="{ width: chatListWidth + 'px' }">
       <div class="chat-list-header">
-        <h3>{{ activeNav === 'chats' ? '聊天' : '直播' }}</h3>
+        <h3 class="list-title">{{ activeNav === 'chats' ? '聊天' : '直播' }}</h3>
         <el-button 
           size="small" 
           type="primary" 
@@ -164,7 +164,6 @@ import { computed, onMounted, ref } from 'vue'
 import { ChatLineRound, VideoCamera, Setting, Plus } from '@element-plus/icons-vue'
 import ChatArea from '@/components/main/ChatArea.vue'
 import VideoRoom from '@/components/main/VideoRoom.vue'
-import RoomPage from '@/components/main/RoomPage.vue'
 import PrivateChatPage from '@/components/main/PrivateChatPage.vue'
 import ProfileModal from '@/components/modals/ProfileModal.vue'
 import AddFriendModal from '@/components/modals/AddFriendModal.vue'
@@ -345,6 +344,7 @@ const currentView = computed(() => {
 </script>
 
 <style scoped>
+@import '@/styles/premium-typography.css';
 .main-container {
   display: flex;
   height: 100vh;
@@ -731,8 +731,19 @@ const currentView = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #888888;
-  font-size: 16px;
-  background: radial-gradient(circle at center, #2a2a2a 0%, #1f1f1f 70%);
+  color: var(--color-neutral-500);
+  font-size: var(--text-base);
+  font-family: var(--font-primary);
+  font-weight: var(--font-normal);
+  background: var(--color-neutral-50);
+}
+
+.list-title {
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--color-neutral-900);
+  margin: 0;
+  font-family: var(--font-display);
+  letter-spacing: -0.025em;
 }
 </style>

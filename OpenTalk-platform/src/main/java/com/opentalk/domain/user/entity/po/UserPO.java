@@ -1,5 +1,6 @@
 package com.opentalk.domain.user.entity.po;
 
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -10,6 +11,7 @@ import java.time.LocalDateTime;
  * @date 2025/7/15
  */
 @Data
+@TableName("user")
 public class UserPO {
 
     private String id;

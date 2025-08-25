@@ -1,12 +1,11 @@
 // 用户类型
 export interface User {
-    id: number
+    id: string
     username: string
     password?: string
-    name: string
-    avatar: string
+    nickname: string
+    avatar?: string
     status: 'online' | 'offline' | 'away' | 'busy'
-    bio: string
     email?: string
     phone?: string
     lastSeen?: string
@@ -15,30 +14,30 @@ export interface User {
 
 // 消息类型
 export interface Message {
-    id: number
-    senderId: number
+    id: string
+    senderId: string
     senderName: string
     senderAvatar: string
     content: string
     type: 'text' | 'image' | 'file' | 'video' | 'audio' | 'system'
     timestamp: number
-    chatId: number
+    chatId: string
     chatType: 'private' | 'group'
     isRead?: boolean
-    replyTo?: number
+    replyTo?: string
     reactions?: MessageReaction[]
 }
 
 // 消息反应
 export interface MessageReaction {
     emoji: string
-    userId: number
+    userId: string
     userName: string
 }
 
 // 聊天会话类型
 export interface Chat {
-    id: number
+    id: string
     type: 'private' | 'group'
     name: string
     avatar: string
@@ -54,8 +53,8 @@ export interface Chat {
 // 群组类型
 export interface Group extends Chat {
     description: string
-    creator: number
-    admins: number[]
+    creator: string
+    admins: string[]
     settings: GroupSettings
 }
 
@@ -69,10 +68,10 @@ export interface GroupSettings {
 
 // 房间类型（音视频通话）
 export interface Room {
-    id: number
+    id: string
     name: string
     type: 'video' | 'audio'
-    creator: number
+    creator: string
     participants: RoomParticipant[]
     maxParticipants: number
     isLocked: boolean
@@ -93,16 +92,16 @@ export interface RoomParticipant {
 
 // 好友类型
 export interface Friend extends User {
-    friendshipId: number
+    friendshipId: string
     addedAt: number
     lastMessage?: Message
     unreadCount: number
-    chatId?: number
+    chatId?: string
 }
 
 // 好友请求
 export interface FriendRequest {
-    id: number
+    id: string
     fromUser: User
     toUser: User
     message: string
@@ -112,7 +111,7 @@ export interface FriendRequest {
 
 // 通知类型
 export interface Notification {
-    id: number
+    id: string
     type: 'friend_request' | 'message' | 'group_invite' | 'system'
     title: string
     content: string
@@ -131,7 +130,7 @@ export interface ApiResponse<T = any> {
 
 // 文件上传类型
 export interface FileUpload {
-    id: number
+    id: string
     name: string
     size: number
     type: string

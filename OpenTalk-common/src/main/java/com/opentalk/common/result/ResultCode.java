@@ -7,7 +7,6 @@ import lombok.Getter;
  * 响应码枚举
  */
 @Getter
-@AllArgsConstructor
 public enum ResultCode {
 
     /**
@@ -43,4 +42,16 @@ public enum ResultCode {
     private final int code;
     private final String msg;
 
+    ResultCode(int code, String msg) {
+        this.code = code;
+        this.msg = msg;
+    }
+
+    public int getCode() {
+        return code;
+    }
+
+    public String getMsg() {
+        return msg;
+    }
 }

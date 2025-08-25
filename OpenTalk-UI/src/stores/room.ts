@@ -1,483 +1,405 @@
 import { defineStore } from 'pinia'
-import type { Room, RoomParticipant } from '@/types'
-import { useUserStore } from './user'
+import { ref, computed } from 'vue'
+import { roomService, type Room, type RoomInfo, type CreateRoomRequest, type JoinRoomRequest, type LeaveRoomRequest } from '@/services/room.service.enhanced'
+import type { RoomParticipant } from '@/types'
 
-export const useRoomStore = defineStore('room', {
-    state: () => ({
-        rooms: [] as Room[],
-        currentRoom: null as Room | null,
-        selectedRoom: null as Room | null,
-        localStream: null as MediaStream | null,
-        remoteStreams: {} as Record<number, MediaStream>,
-        isVideoEnabled: false,
-        isMicEnabled: false,
-        isScreenSharing: false,
-        connectionStatus: 'disconnected' as 'connecting' | 'connected' | 'disconnected' | 'failed',
-        participants: [] as RoomParticipant[],
-        isInCall: false,
-        audioEnabled: true,
-        videoEnabled: true,
-        screenShareSupported: true,
-        callParticipants: [] as any[],
-        roomSettings: {
-            maxParticipants: 8,
-            allowScreenShare: true,
-            recordSession: false,
-            muteOnJoin: true
-        }
-    }),
+export const useRoomStore = defineStore('room', () => {
+  // State
+  const rooms = ref<Room[]>([])
+  const currentRoom = ref<RoomInfo | null>(null)
+  const localStream = ref<MediaStream | null>(null)
+  const remoteStreams = ref<Record<string, MediaStream>>({})
+  const isConnected = ref(false)
+  const isLoading = ref(false)
+  const error = ref<string | null>(null)
+  const roomSettings = ref({
+    videoEnabled: true,
+    audioEnabled: true,
+    screenSharing: false,
+    maxParticipants: 8,
+    allowScreenShare: true,
+    recordSession: false,
+    muteOnJoin: true
+  })
 
-    getters: {
-        isInRoom: (state) => state.currentRoom !== null,
-        
-        activeParticipants: (state) => {
-            return state.participants.filter(p => p.status === 'connected')
-        },
-        
-        participantCount: (state) => {
-            return state.participants.length
-        },
-        
-        canJoinRoom: (state) => {
-            return state.participantCount < state.roomSettings.maxParticipants
-        },
-        
-        currentUserParticipant: (state) => {
-            const userStore = useUserStore()
-            return state.participants.find(p => p.userId === userStore.currentUser?.id)
-        }
-    },
+  // Media state
+  const isVideoEnabled = ref(false)
+  const isMicEnabled = ref(false)
+  const isScreenSharing = ref(false)
+  const connectionStatus = ref<'connecting' | 'connected' | 'disconnected' | 'failed'>('disconnected')
+  const isInCall = ref(false)
 
-    actions: {
-        async initializeMedia() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: true,
-                    audio: true
-                })
-                this.localStream = stream
-                this.isVideoEnabled = true
-                this.isMicEnabled = !this.roomSettings.muteOnJoin
-                
-                // 如果设置为加入时静音，则静音麦克风
-                if (this.roomSettings.muteOnJoin) {
-                    this.toggleMic()
-                }
-                
-                return stream
-            } catch (error) {
-                console.error('Failed to initialize media:', error)
-                throw error
-            }
-        },
-        
-        async getScreenShare() {
-            try {
-                const stream = await navigator.mediaDevices.getDisplayMedia({
-                    video: true,
-                    audio: true
-                })
-                return stream
-            } catch (error) {
-                console.error('Failed to get screen share:', error)
-                throw error
-            }
-        },
+  // Getters
+  const activeRooms = computed(() => 
+    rooms.value.filter((room: Room) => room.status === 'active')
+  )
 
-        createRoom(name: string, description: string, isPrivate: boolean = false) {
-            const userStore = useUserStore()
-            if (!userStore.currentUser) return null
-            
-            const room: Room = {
-                id: `room_${Date.now()}`,
-                name,
-                description,
-                hostId: userStore.currentUser.id,
-                participants: [],
-                maxParticipants: this.roomSettings.maxParticipants,
-                isPrivate,
-                settings: {
-                    allowScreenShare: this.roomSettings.allowScreenShare,
-                    recordSession: this.roomSettings.recordSession,
-                    muteOnJoin: this.roomSettings.muteOnJoin,
-                    requireApproval: isPrivate
-                },
-                createdAt: Date.now(),
-                isActive: true
-            }
-            
-            this.rooms.push(room)
-            return room
-        },
+  const publicRooms = computed(() => 
+    rooms.value.filter((room: Room) => room.isPublic && room.status === 'active')
+  )
 
-        async joinRoom(roomId: string) {
-            const userStore = useUserStore()
-            if (!userStore.currentUser) return false
-            
-            const room = this.rooms.find(r => r.id === roomId)
-            if (!room || !this.canJoinRoom) return false
-            
-            try {
-                this.connectionStatus = 'connecting'
-                
-                // 初始化媒体设备
-                await this.initializeMedia()
-                
-                // 创建参与者信息
-                const participant: RoomParticipant = {
-                    userId: userStore.currentUser.id,
-                    name: userStore.currentUser.name,
-                    avatar: userStore.currentUser.avatar,
-                    joinedAt: Date.now(),
-                    isVideoEnabled: this.isVideoEnabled,
-                    isMicEnabled: this.isMicEnabled,
-                    isScreenSharing: false,
-                    status: 'connected',
-                    role: room.hostId === userStore.currentUser.id ? 'host' : 'participant'
-                }
-                
-                // 添加到房间参与者列表
-                room.participants.push(participant)
-                this.participants.push(participant)
-                
-                this.currentRoom = room
-                this.connectionStatus = 'connected'
-                
-                return true
-            } catch (error) {
-                console.error('Failed to join room:', error)
-                this.connectionStatus = 'failed'
-                return false
-            }
-        },
+  const currentRoomParticipants = computed(() => 
+    currentRoom.value?.members || []
+  )
 
-        leaveRoom(roomId?: string) {
-            const userStore = useUserStore()
-            if (!userStore.currentUser || !this.currentRoom) return
-            
-            // 停止本地媒体流
-            if (this.localStream) {
-                this.localStream.getTracks().forEach(track => track.stop())
-                this.localStream = null
-            }
-            
-            // 停止屏幕共享
-            if (this.isScreenSharing) {
-                this.stopScreenShare()
-            }
-            
-            // 从房间中移除参与者
-            const room = this.currentRoom
-            const participantIndex = room.participants.findIndex(
-                p => p.userId === userStore.currentUser!.id
-            )
-            
-            if (participantIndex > -1) {
-                room.participants.splice(participantIndex, 1)
-            }
-            
-            // 从本地参与者列表中移除
-            const localParticipantIndex = this.participants.findIndex(
-                p => p.userId === userStore.currentUser!.id
-            )
-            
-            if (localParticipantIndex > -1) {
-                this.participants.splice(localParticipantIndex, 1)
-            }
-            
-            // 如果是房主离开且还有其他参与者，转让房主
-            if (room.hostId === userStore.currentUser.id && room.participants.length > 0) {
-                room.hostId = room.participants[0].userId
-                room.participants[0].role = 'host'
-            }
-            
-            // 如果房间没有参与者了，标记为非活跃
-            if (room.participants.length === 0) {
-                room.isActive = false
-            }
-            
-            this.currentRoom = null
-            this.isVideoEnabled = false
-            this.isMicEnabled = false
-            this.isScreenSharing = false
-            this.connectionStatus = 'disconnected'
-            this.remoteStreams = {}
-        },
+  const isInRoom = computed(() => !!currentRoom.value)
 
-        toggleVideo() {
-            if (!this.localStream) return
-            
-            this.isVideoEnabled = !this.isVideoEnabled
-            
-            const videoTrack = this.localStream.getVideoTracks()[0]
-            if (videoTrack) {
-                videoTrack.enabled = this.isVideoEnabled
-            }
-            
-            // 更新参与者状态
-            const participant = this.currentUserParticipant
-            if (participant) {
-                participant.isVideoEnabled = this.isVideoEnabled
-            }
-        },
+  const participantCount = computed(() => 
+    currentRoomParticipants.value.length
+  )
 
-        toggleMic() {
-            if (!this.localStream) return
-            
-            this.isMicEnabled = !this.isMicEnabled
-            
-            const audioTrack = this.localStream.getAudioTracks()[0]
-            if (audioTrack) {
-                audioTrack.enabled = this.isMicEnabled
-            }
-            
-            // 更新参与者状态
-            const participant = this.currentUserParticipant
-            if (participant) {
-                participant.isMicEnabled = this.isMicEnabled
-            }
-        },
-        
-        async startScreenShare() {
-            if (!this.roomSettings.allowScreenShare) return false
-            
-            try {
-                const screenStream = await this.getScreenShare()
-                
-                // 替换视频轨道
-                if (this.localStream) {
-                    const videoTrack = this.localStream.getVideoTracks()[0]
-                    const screenTrack = screenStream.getVideoTracks()[0]
-                    
-                    if (videoTrack && screenTrack) {
-                        this.localStream.removeTrack(videoTrack)
-                        this.localStream.addTrack(screenTrack)
-                        videoTrack.stop()
-                    }
-                }
-                
-                this.isScreenSharing = true
-                
-                // 监听屏幕共享结束
-                screenStream.getVideoTracks()[0].onended = () => {
-                    this.stopScreenShare()
-                }
-                
-                // 更新参与者状态
-                const participant = this.currentUserParticipant
-                if (participant) {
-                    participant.isScreenSharing = true
-                }
-                
-                return true
-            } catch (error) {
-                console.error('Failed to start screen share:', error)
-                return false
-            }
-        },
-        
-        async stopScreenShare() {
-            if (!this.isScreenSharing) return
-            
-            try {
-                // 重新获取摄像头
-                const cameraStream = await navigator.mediaDevices.getUserMedia({
-                    video: true,
-                    audio: false
-                })
-                
-                if (this.localStream) {
-                    const currentVideoTrack = this.localStream.getVideoTracks()[0]
-                    const newVideoTrack = cameraStream.getVideoTracks()[0]
-                    
-                    if (currentVideoTrack && newVideoTrack) {
-                        this.localStream.removeTrack(currentVideoTrack)
-                        this.localStream.addTrack(newVideoTrack)
-                        currentVideoTrack.stop()
-                        
-                        // 设置视频轨道状态
-                        newVideoTrack.enabled = this.isVideoEnabled
-                    }
-                }
-                
-                this.isScreenSharing = false
-                
-                // 更新参与者状态
-                const participant = this.currentUserParticipant
-                if (participant) {
-                    participant.isScreenSharing = false
-                }
-            } catch (error) {
-                console.error('Failed to stop screen share:', error)
-            }
-        },
-        
-        addRemoteStream(userId: number, stream: MediaStream) {
-            this.remoteStreams[userId] = stream
-        },
-        
-        removeRemoteStream(userId: number) {
-            if (this.remoteStreams[userId]) {
-                this.remoteStreams[userId].getTracks().forEach(track => track.stop())
-                delete this.remoteStreams[userId]
-            }
-        },
-        
-        updateParticipantStatus(userId: number, updates: Partial<RoomParticipant>) {
-            const participant = this.participants.find(p => p.userId === userId)
-            if (participant) {
-                Object.assign(participant, updates)
-            }
-            
-            // 同时更新房间中的参与者信息
-            if (this.currentRoom) {
-                const roomParticipant = this.currentRoom.participants.find(p => p.userId === userId)
-                if (roomParticipant) {
-                    Object.assign(roomParticipant, updates)
-                }
-            }
-        },
-        
-        kickParticipant(userId: number) {
-            const userStore = useUserStore()
-            if (!userStore.currentUser || !this.currentRoom) return false
-            
-            // 只有房主可以踢人
-            if (this.currentRoom.hostId !== userStore.currentUser.id) return false
-            
-            const participantIndex = this.participants.findIndex(p => p.userId === userId)
-            if (participantIndex > -1) {
-                this.participants.splice(participantIndex, 1)
-            }
-            
-            const roomParticipantIndex = this.currentRoom.participants.findIndex(p => p.userId === userId)
-            if (roomParticipantIndex > -1) {
-                this.currentRoom.participants.splice(roomParticipantIndex, 1)
-            }
-            
-            // 移除远程流
-            this.removeRemoteStream(userId)
-            
-            return true
-        },
-        
-        muteParticipant(userId: number, mute: boolean) {
-            const userStore = useUserStore()
-            if (!userStore.currentUser || !this.currentRoom) return false
-            
-            // 只有房主可以静音他人
-            if (this.currentRoom.hostId !== userStore.currentUser.id) return false
-            
-            this.updateParticipantStatus(userId, { isMicEnabled: !mute })
-            return true
-        },
-        
-        updateRoomSettings(roomIdOrSettings: string | Partial<typeof this.roomSettings>, settings?: any) {
-            if (typeof roomIdOrSettings === 'string') {
-                // 新的签名：updateRoomSettings(roomId, settings)
-                const room = this.rooms.find(r => r.id === roomIdOrSettings)
-                if (room && settings) {
-                    Object.assign(room.settings, settings)
-                }
-            } else {
-                // 原有签名：updateRoomSettings(settings)
-                Object.assign(this.roomSettings, roomIdOrSettings)
-                if (this.currentRoom) {
-                    Object.assign(this.currentRoom.settings, roomIdOrSettings)
-                }
-            }
-        },
-        
-        getRoomById(roomId: string) {
-            return this.rooms.find(r => r.id === roomId)
-        },
-        
-        getActiveRooms() {
-            return this.rooms.filter(r => r.isActive)
-        },
-        
-        getPublicRooms() {
-            return this.rooms.filter(r => r.isActive && !r.isPrivate)
-        },
+  const canJoinRoom = computed(() => 
+    participantCount.value < roomSettings.value.maxParticipants
+  )
 
-        // 选择房间（用于显示房间页面）
-        selectRoom(room: Room) {
-            this.currentRoom = room
-        },
+  const activeParticipants = computed(() => 
+    currentRoomParticipants.value.filter((p: RoomParticipant) => p.status === 'online')
+  )
 
-        // 加载房间列表（模拟数据）
-        loadRooms() {
-            this.rooms = [
-                {
-                    id: '1',
-                    name: '技术讨论',
-                    description: '技术相关话题讨论',
-                    type: 'text',
-                    isPrivate: false,
-                    createdBy: 1,
-                    createdAt: new Date(),
-                    participants: [],
-                    maxParticipants: 50,
-                    settings: {
-                        allowScreenShare: true,
-                        recordSession: false,
-                        muteOnJoin: false
-                    },
-                    status: 'active',
-                    hostId: 1,
-                    isActive: true
-                },
-                {
-                    id: '2',
-                    name: '项目会议',
-                    description: '项目进度讨论',
-                    type: 'video',
-                    isPrivate: true,
-                    createdBy: 2,
-                    createdAt: new Date(),
-                    participants: [],
-                    maxParticipants: 10,
-                    settings: {
-                        allowScreenShare: true,
-                        recordSession: true,
-                        muteOnJoin: true
-                    },
-                    status: 'active',
-                    hostId: 2,
-                    isActive: true
-                }
-            ]
-        },
-
-        // 加入通话
-        async joinCall(roomId: string) {
-            try {
-                await this.initializeMedia()
-                this.isInCall = true
-                // 这里应该实现实际的WebRTC连接逻辑
-                return true
-            } catch (error) {
-                console.error('Failed to join call:', error)
-                throw error
-            }
-        },
-
-        // 离开通话
-        async leaveCall() {
-            this.isInCall = false
-            if (this.localStream) {
-                this.localStream.getTracks().forEach(track => track.stop())
-                this.localStream = null
-            }
-        },
-
-        // 切换屏幕共享
-        async toggleScreenShare() {
-            if (this.isScreenSharing) {
-                await this.stopScreenShare()
-            } else {
-                await this.startScreenShare()
-            }
-        }
+  // Media Actions
+  const initializeMedia = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: roomSettings.value.videoEnabled,
+        audio: roomSettings.value.audioEnabled
+      })
+      
+      localStream.value = stream
+      isVideoEnabled.value = true
+      isMicEnabled.value = !roomSettings.value.muteOnJoin
+      
+      // 如果设置为加入时静音，则静音麦克风
+      if (roomSettings.value.muteOnJoin) {
+        toggleMic()
+      }
+      
+      return stream
+    } catch (err) {
+      error.value = '无法访问媒体设备'
+      throw err
     }
+  }
+
+  const toggleVideo = () => {
+    if (!localStream.value) return
+    
+    const videoTrack = localStream.value.getVideoTracks()[0]
+    if (videoTrack) {
+      videoTrack.enabled = !videoTrack.enabled
+      isVideoEnabled.value = videoTrack.enabled
+      roomSettings.value.videoEnabled = videoTrack.enabled
+    }
+  }
+
+  const toggleMic = () => {
+    if (!localStream.value) return
+    
+    const audioTrack = localStream.value.getAudioTracks()[0]
+    if (audioTrack) {
+      audioTrack.enabled = !audioTrack.enabled
+      isMicEnabled.value = audioTrack.enabled
+      roomSettings.value.audioEnabled = audioTrack.enabled
+    }
+  }
+
+  const startScreenShare = async () => {
+    try {
+      const screenStream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: true
+      })
+      
+      // Replace video track with screen share
+      if (localStream.value) {
+        const videoTrack = localStream.value.getVideoTracks()[0]
+        if (videoTrack) {
+          localStream.value.removeTrack(videoTrack)
+        }
+        
+        const screenTrack = screenStream.getVideoTracks()[0]
+        localStream.value.addTrack(screenTrack)
+        
+        isScreenSharing.value = true
+        roomSettings.value.screenSharing = true
+        
+        // Handle screen share end
+        screenTrack.onended = () => {
+          stopScreenShare()
+        }
+      }
+    } catch (err) {
+      error.value = '开始屏幕共享失败'
+      throw err
+    }
+  }
+
+  const stopScreenShare = async () => {
+    if (!localStream.value || !isScreenSharing.value) return
+    
+    try {
+      // Get new camera stream
+      const cameraStream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: false // Keep existing audio
+      })
+      
+      // Replace screen track with camera track
+      const screenTrack = localStream.value.getVideoTracks()[0]
+      if (screenTrack) {
+        localStream.value.removeTrack(screenTrack)
+        screenTrack.stop()
+      }
+      
+      const cameraTrack = cameraStream.getVideoTracks()[0]
+      localStream.value.addTrack(cameraTrack)
+      
+      isScreenSharing.value = false
+      roomSettings.value.screenSharing = false
+    } catch (err) {
+      error.value = '停止屏幕共享失败'
+      throw err
+    }
+  }
+
+  const toggleScreenShare = async () => {
+    if (isScreenSharing.value) {
+      await stopScreenShare()
+    } else {
+      await startScreenShare()
+    }
+  }
+
+  const addRemoteStream = (userId: string, stream: MediaStream) => {
+    remoteStreams.value[userId] = stream
+  }
+
+  const removeRemoteStream = (userId: string) => {
+    const stream = remoteStreams.value[userId]
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop())
+      delete remoteStreams.value[userId]
+    }
+  }
+
+  // Room Management Actions (delegated to service)
+  const createRoom = async (roomData: { roomName: string; ownerUid: string; ownerName: string; description?: string; isPublic: boolean; maxMembers: number }) => {
+    isLoading.value = true
+    error.value = null
+    
+    try {
+      const createRequest: CreateRoomRequest = roomData
+      const newRoom = await roomService.createRoom(createRequest)
+      
+      rooms.value.push(newRoom)
+      // 创建房间后获取详细信息
+      await getRoomInfo(newRoom.id)
+      
+      return newRoom
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '创建房间失败'
+      throw err
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  const joinRoom = async (roomId: string, userId: string, userName: string) => {
+    isLoading.value = true
+    error.value = null
+    connectionStatus.value = 'connecting'
+    
+    try {
+      const joinRequest: JoinRoomRequest = { roomId, userId, userName }
+      await roomService.joinRoom(joinRequest)
+      
+      // 加入成功后获取房间详细信息
+      await getRoomInfo(roomId)
+      isConnected.value = true
+      connectionStatus.value = 'connected'
+      
+      // Initialize media when joining room
+      await initializeMedia()
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '加入房间失败'
+      connectionStatus.value = 'failed'
+      throw err
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  const leaveRoom = async (userId: string) => {
+    if (!currentRoom.value) return
+    
+    isLoading.value = true
+    
+    try {
+      const leaveRequest: LeaveRoomRequest = { roomId: currentRoom.value.id, userId }
+      await roomService.leaveRoom(leaveRequest)
+      
+      // Clean up media streams
+       if (localStream.value) {
+         localStream.value.getTracks().forEach((track: MediaStreamTrack) => track.stop())
+       }
+       
+       // Clean up remote streams
+       Object.values(remoteStreams.value).forEach((stream: MediaStream) => {
+         stream.getTracks().forEach((track: MediaStreamTrack) => track.stop())
+       })
+      
+      // Reset state
+      localStream.value = null
+      remoteStreams.value = {}
+      currentRoom.value = null
+      isConnected.value = false
+      connectionStatus.value = 'disconnected'
+      isInCall.value = false
+      isVideoEnabled.value = false
+      isMicEnabled.value = false
+      isScreenSharing.value = false
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '离开房间失败'
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  const getRoomInfo = async (roomId: string) => {
+    try {
+      const roomInfo = await roomService.getRoomInfo(roomId)
+      currentRoom.value = roomInfo
+      return roomInfo
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '获取房间信息失败'
+      throw err
+    }
+  }
+
+  const loadPublicRooms = async () => {
+    isLoading.value = true
+    error.value = null
+    
+    try {
+      const publicRoomList = await roomService.getPublicRooms()
+      rooms.value = publicRoomList
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '加载公共房间失败'
+      throw err
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  const loadOwnedRooms = async (userId: string) => {
+    isLoading.value = true
+    error.value = null
+    
+    try {
+      const ownedRoomList = await roomService.getOwnedRooms(userId)
+      return ownedRoomList
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '加载拥有的房间失败'
+      throw err
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  const loadJoinedRooms = async (userId: string) => {
+    isLoading.value = true
+    error.value = null
+    
+    try {
+      const joinedRoomList = await roomService.getJoinedRooms(userId)
+      return joinedRoomList
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '加载已加入的房间失败'
+      throw err
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  // 加载房间列表（默认加载公共房间）
+  const loadRooms = async () => {
+    return await loadPublicRooms()
+  }
+
+  // Utility Actions
+  const selectRoom = (room: Room) => {
+    // 只设置基本房间信息，详细信息需要通过getRoomInfo获取
+    currentRoom.value = {
+      ...room,
+      members: []
+    }
+  }
+
+  const updateRoomSettings = (settings: Partial<typeof roomSettings.value>) => {
+    Object.assign(roomSettings.value, settings)
+  }
+
+  // WebRTC related functions (simplified)
+  const joinCall = async (roomId: string, userId: string, userName: string) => {
+    await joinRoom(roomId, userId, userName)
+    isInCall.value = true
+    // Additional WebRTC setup would go here
+  }
+
+  const leaveCall = async (userId: string) => {
+    await leaveRoom(userId)
+    isInCall.value = false
+    // Additional WebRTC cleanup would go here
+  }
+
+  return {
+    // State
+    rooms,
+    currentRoom,
+    localStream,
+    remoteStreams,
+    isConnected,
+    isLoading,
+    error,
+    roomSettings,
+    isVideoEnabled,
+    isMicEnabled,
+    isScreenSharing,
+    connectionStatus,
+    isInCall,
+    
+    // Getters
+    activeRooms,
+    publicRooms,
+    currentRoomParticipants,
+    isInRoom,
+    participantCount,
+    canJoinRoom,
+    activeParticipants,
+    
+    // Media Actions
+    initializeMedia,
+    toggleVideo,
+    toggleMic,
+    startScreenShare,
+    stopScreenShare,
+    toggleScreenShare,
+    addRemoteStream,
+    removeRemoteStream,
+    
+    // Room Management Actions
+    createRoom,
+    joinRoom,
+    leaveRoom,
+    getRoomInfo,
+    loadRooms,
+    loadPublicRooms,
+    loadOwnedRooms,
+    loadJoinedRooms,
+    selectRoom,
+    updateRoomSettings,
+    
+    // WebRTC Actions
+    joinCall,
+    leaveCall
+  }
 })

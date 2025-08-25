@@ -1,16 +1,17 @@
 import { defineStore } from 'pinia'
 import type { Message, Chat, Group, MessageReaction } from '@/types'
 import { useUserStore } from './user'
+import { chatService } from '@/services/chat.service.enhanced'
 
 export const useChatStore = defineStore('chat', {
     state: () => ({
-        chats: [] as Chat[],
-        groups: [] as Group[],
-        messages: {} as Record<string, Message[]>, // chatId -> messages
-        selectedChatId: null as string | null,
-        selectedChatType: 'private' as 'private' | 'group',
+        chats: JSON.parse(localStorage.getItem('chat_chats') || '[]') as Chat[],
+        groups: JSON.parse(localStorage.getItem('chat_groups') || '[]') as Group[],
+        messages: JSON.parse(localStorage.getItem('chat_messages') || '{}') as Record<string, Message[]>, // chatId -> messages
+        selectedChatId: localStorage.getItem('chat_selectedChatId') as string | null,
+        selectedChatType: (localStorage.getItem('chat_selectedChatType') || 'private') as 'private' | 'group',
         typingUsers: {} as Record<string, number[]>, // chatId -> userIds
-        onlineUsers: [] as number[]
+        onlineUsers: [] as string[]
     }),
 
     getters: {
@@ -23,44 +24,12 @@ export const useChatStore = defineStore('chat', {
             
             if (state.selectedChatType === 'private') {
                 const chat = state.chats.find(chat => chat.id === state.selectedChatId)
-                if (chat && chat.friendInfo) {
-                    // 返回好友信息用于显示
+                if (chat) {
                     return {
                         id: chat.id,
-                        name: chat.friendInfo.name,
-                        avatar: chat.friendInfo.avatar,
-                        status: chat.friendInfo.status || 'offline',
-                        isGroup: false
-                    }
-                }
-                return null
-            } else {
-                const group = state.groups.find(group => group.id === state.selectedChatId)
-                if (group) {
-                    return {
-                        id: group.id,
-                        name: group.name,
-                        avatar: group.avatar,
+                        name: chat.name,
+                        avatar: chat.avatar,
                         status: 'online',
-                        isGroup: true
-                    }
-                }
-                return null
-            }
-        },
-        
-        selectedChat: (state) => {
-            // 兼容性 getter，与 currentChat 相同
-            if (!state.selectedChatId) return null
-            
-            if (state.selectedChatType === 'private') {
-                const chat = state.chats.find(chat => chat.id === state.selectedChatId)
-                if (chat && chat.friendInfo) {
-                    return {
-                        id: chat.id,
-                        name: chat.friendInfo.name,
-                        avatar: chat.friendInfo.avatar,
-                        status: chat.friendInfo.status || 'offline',
                         isGroup: false
                     }
                 }
@@ -106,129 +75,245 @@ export const useChatStore = defineStore('chat', {
     },
 
     actions: {
-        initializeChats() {
+        // 保存数据到localStorage
+        saveToStorage() {
+            try {
+                localStorage.setItem('chat_chats', JSON.stringify(this.chats))
+                localStorage.setItem('chat_groups', JSON.stringify(this.groups))
+                localStorage.setItem('chat_messages', JSON.stringify(this.messages))
+                localStorage.setItem('chat_selectedChatId', this.selectedChatId || '')
+                localStorage.setItem('chat_selectedChatType', this.selectedChatType)
+            } catch (error) {
+                console.warn('保存聊天数据到本地存储失败:', error)
+            }
+        },
+        
+        // 清除本地存储
+        clearStorage() {
+            try {
+                localStorage.removeItem('chat_chats')
+                localStorage.removeItem('chat_groups')
+                localStorage.removeItem('chat_messages')
+                localStorage.removeItem('chat_selectedChatId')
+                localStorage.removeItem('chat_selectedChatType')
+            } catch (error) {
+                console.warn('清除聊天数据本地存储失败:', error)
+            }
+        },
+        
+        async initializeChats() {
             const userStore = useUserStore()
             if (!userStore.currentUser) return
             
-            // 初始化私聊
+            // 如果本地已有数据且不为空，直接使用
+            if (this.chats.length > 0 || this.groups.length > 0) {
+                return
+            }
+            
+            try {
+                // 使用增强的聊天服务获取聊天列表
+                const [chats, groups] = await Promise.all([
+                    chatService.getChats(userStore.currentUser.id),
+                    chatService.getGroups(userStore.currentUser.id)
+                ])
+                
+                this.chats = chats
+                this.groups = groups
+                
+                // 初始化示例消息
+                this.initializeSampleMessages()
+                
+                // 保存到本地存储
+                this.saveToStorage()
+            } catch (error) {
+                console.error('初始化聊天失败:', error)
+                // 如果服务失败，使用本地数据
+                this.initializeLocalChats()
+            }
+        },
+        
+        initializeLocalChats() {
+            const userStore = useUserStore()
+            if (!userStore.currentUser) return
+            
+            // 基于好友列表创建私聊
             this.chats = userStore.friends.map(friend => ({
-                id: `private_${Math.min(userStore.currentUser!.id, friend.id)}_${Math.max(userStore.currentUser!.id, friend.id)}`,
-                participants: [userStore.currentUser!.id, friend.id],
-                lastMessage: null,
-                unreadCount: friend.unreadCount || 0,
-                createdAt: friend.addedAt,
-                updatedAt: Date.now(),
-                // 添加好友信息用于显示
-                friendInfo: friend
+                id: `private_${userStore.currentUser!.id}_${friend.id}`,
+                type: 'private' as const,
+                name: friend.nickname,
+                avatar: friend.avatar || '/default-avatar.png',
+                participants: [
+                    userStore.currentUser!,
+                    {
+                        id: friend.id,
+                        username: friend.nickname,
+                        nickname: friend.nickname,
+                        avatar: friend.avatar,
+                        status: friend.status
+                    }
+                ],
+                lastMessage: undefined,
+                unreadCount: 0,
+                isOnline: friend.status === 'online',
+                createdAt: Date.now(),
+                updatedAt: Date.now()
             }))
             
-            // 初始化一些示例群组
+            // 创建示例群组
             this.groups = [
                 {
                     id: 'group_1',
-                    name: '工作群',
-                    description: '日常工作交流',
-                    avatar: '💼',
-                    participants: [userStore.currentUser.id, 1, 2, 3],
+                    type: 'group' as const,
+                    name: '开发团队',
+                    avatar: '/group-avatar.png',
+                    description: '项目开发讨论群',
+                    creator: userStore.currentUser.id,
                     admins: [userStore.currentUser.id],
-                    owner: userStore.currentUser.id,
+                    participants: [
+                        userStore.currentUser,
+                        ...userStore.friends.slice(0, 3).map(friend => ({
+                            id: friend.id,
+                            username: friend.nickname,
+                            nickname: friend.nickname,
+                            avatar: friend.avatar,
+                            status: friend.status
+                        }))
+                    ],
                     settings: {
                         allowInvite: true,
+                        allowMemberAdd: true,
                         muteAll: false,
-                        showMemberCount: true
+                        showMemberList: true
                     },
+                    lastMessage: undefined,
                     unreadCount: 0,
-                    createdAt: Date.now() - 86400000 * 7, // 7天前
-                    updatedAt: Date.now()
-                },
-                {
-                    id: 'group_2',
-                    name: '朋友圈',
-                    description: '朋友们的日常分享',
-                    avatar: '👥',
-                    participants: [userStore.currentUser.id, 2, 4, 5],
-                    admins: [2],
-                    owner: 2,
-                    settings: {
-                        allowInvite: false,
-                        muteAll: false,
-                        showMemberCount: true
-                    },
-                    unreadCount: 2,
-                    createdAt: Date.now() - 86400000 * 3, // 3天前
+                    createdAt: Date.now(),
                     updatedAt: Date.now()
                 }
             ]
             
-            // 初始化一些示例消息
             this.initializeSampleMessages()
+            
+            // 保存到本地存储
+            this.saveToStorage()
         },
         
         initializeSampleMessages() {
             const userStore = useUserStore()
-            if (!userStore.currentUser) return
+            const currentUserId = userStore.currentUser?.id
             
-            // 为第一个私聊添加示例消息
-            if (this.chats.length > 0) {
-                const firstChatId = this.chats[0].id
-                this.messages[firstChatId] = [
+            // 为每个私聊添加示例消息
+            this.chats.forEach((chat, index) => {
+                const otherUser = chat.participants.find(p => p.id !== currentUserId)
+                if (!otherUser) return
+                
+                this.messages[chat.id] = [
                     {
-                        id: 'msg_1',
-                        senderId: this.chats[0].participants.find(id => id !== userStore.currentUser!.id)!,
+                        id: `msg_${chat.id}_1`,
+                        senderId: otherUser.id,
+                        senderName: otherUser.nickname,
+                        senderAvatar: otherUser.avatar || '/default-avatar.png',
                         content: '你好！最近怎么样？',
-                        timestamp: Date.now() - 3600000, // 1小时前
                         type: 'text',
-                        chatId: firstChatId,
-                        status: 'read'
+                        timestamp: Date.now() - 7200000 - (index * 300000),
+                        chatId: chat.id,
+                        chatType: 'private',
+                        isRead: true
                     },
                     {
-                        id: 'msg_2',
-                        senderId: userStore.currentUser.id,
-                        content: '还不错，你呢？工作忙吗？',
-                        timestamp: Date.now() - 3500000,
+                        id: `msg_${chat.id}_2`,
+                        senderId: currentUserId!,
+                        senderName: userStore.currentUser!.nickname,
+                        senderAvatar: userStore.currentUser!.avatar || '/default-avatar.png',
+                        content: '还不错，你呢？',
                         type: 'text',
-                        chatId: firstChatId,
-                        status: 'read'
+                        timestamp: Date.now() - 7000000 - (index * 300000),
+                        chatId: chat.id,
+                        chatType: 'private',
+                        isRead: true
+                    },
+                    {
+                        id: `msg_${chat.id}_3`,
+                        senderId: otherUser.id,
+                        senderName: otherUser.nickname,
+                        senderAvatar: otherUser.avatar || '/default-avatar.png',
+                        content: '挺好的，有空一起出来聊聊吧！',
+                        type: 'text',
+                        timestamp: Date.now() - 6800000 - (index * 300000),
+                        chatId: chat.id,
+                        chatType: 'private',
+                        isRead: true
                     }
                 ]
-            }
+            })
             
-            // 为群聊添加示例消息
-            if (this.groups.length > 0) {
-                const firstGroupId = this.groups[0].id
-                this.messages[firstGroupId] = [
+            // 为每个群聊添加示例消息
+            this.groups.forEach((group, index) => {
+                const participants = group.participants.filter(p => p.id !== currentUserId)
+                
+                this.messages[group.id] = [
                     {
-                        id: 'msg_group_1',
-                        senderId: 1,
-                        content: '大家好，今天的会议改到下午3点',
-                        timestamp: Date.now() - 7200000, // 2小时前
+                        id: `msg_${group.id}_1`,
+                        senderId: participants[0]?.id || 'user1',
+                        senderName: participants[0]?.nickname || '用户1',
+                        senderAvatar: participants[0]?.avatar || '/default-avatar.png',
+                        content: '大家好！欢迎加入群聊',
                         type: 'text',
-                        chatId: firstGroupId,
-                        status: 'read'
+                        timestamp: Date.now() - 3600000 - (index * 200000),
+                        chatId: group.id,
+                        chatType: 'group',
+                        isRead: true
                     },
                     {
-                        id: 'msg_group_2',
-                        senderId: 2,
-                        content: '收到，我会准时参加的',
-                        timestamp: Date.now() - 7000000,
+                        id: `msg_${group.id}_2`,
+                        senderId: participants[1]?.id || 'user2',
+                        senderName: participants[1]?.nickname || '用户2',
+                        senderAvatar: participants[1]?.avatar || '/default-avatar.png',
+                        content: '谢谢！很高兴认识大家',
                         type: 'text',
-                        chatId: firstGroupId,
-                        status: 'read'
+                        timestamp: Date.now() - 3400000 - (index * 200000),
+                        chatId: group.id,
+                        chatType: 'group',
+                        isRead: true
+                    },
+                    {
+                        id: `msg_${group.id}_3`,
+                        senderId: currentUserId!,
+                        senderName: userStore.currentUser!.nickname,
+                        senderAvatar: userStore.currentUser!.avatar || '/default-avatar.png',
+                        content: '大家好，请多多指教！',
+                        type: 'text',
+                        timestamp: Date.now() - 3200000 - (index * 200000),
+                        chatId: group.id,
+                        chatType: 'group',
+                        isRead: true
                     }
                 ]
-            }
+            })
         },
 
         selectChat(chatId: string, type: 'private' | 'group' = 'private') {
             this.selectedChatId = chatId
             this.selectedChatType = type
             
-            if (!this.messages[chatId]) {
-                this.messages[chatId] = []
-            }
-            
-            // 标记消息为已读
+            // 标记为已读
             this.markChatAsRead(chatId, type)
+            
+            // 加载消息
+            this.loadMessages(chatId)
+            
+            // 保存选择状态到本地存储
+            this.saveToStorage()
+        },
+        
+        async loadMessages(chatId: string) {
+            try {
+                const messages = await chatService.getMessages(chatId)
+                this.messages[chatId] = messages
+            } catch (error) {
+                console.error('加载消息失败:', error)
+                // 如果没有消息，保持现有的示例消息
+            }
         },
         
         markChatAsRead(chatId: string, type: 'private' | 'group') {
@@ -245,46 +330,63 @@ export const useChatStore = defineStore('chat', {
             }
             
             // 标记消息为已读
-            const messages = this.messages[chatId] || []
-            messages.forEach(msg => {
-                if (msg.status === 'delivered') {
-                    msg.status = 'read'
-                }
-            })
+            if (this.messages[chatId]) {
+                this.messages[chatId].forEach(message => {
+                    message.isRead = true
+                })
+            }
         },
 
-        sendMessage(content: string, type: 'text' | 'image' | 'file' | 'audio' = 'text', fileData?: any) {
+        async sendMessage(content: string, type: 'text' | 'image' | 'file' | 'audio' = 'text', fileData?: any) {
+            if (!this.selectedChatId) return
+            
             const userStore = useUserStore()
-            if (!this.selectedChatId || !userStore.currentUser) return
-
-            const message: Message = {
-                id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                senderId: userStore.currentUser.id,
-                content,
-                timestamp: Date.now(),
-                type,
-                chatId: this.selectedChatId,
-                status: 'sent',
-                fileData
+            if (!userStore.currentUser) return
+            
+            try {
+                const message = await chatService.sendMessage({
+                    chatId: this.selectedChatId,
+                    content,
+                    type,
+                    fileData
+                })
+                
+                // 添加到本地消息列表
+                if (!this.messages[this.selectedChatId]) {
+                    this.messages[this.selectedChatId] = []
+                }
+                this.messages[this.selectedChatId].push(message)
+                
+                // 更新聊天的最后消息
+                this.updateChatLastMessage(this.selectedChatId, message)
+                
+                // 保存到本地存储
+                this.saveToStorage()
+            } catch (error) {
+                console.error('发送消息失败:', error)
+                // 创建本地消息作为fallback
+                const localMessage: Message = {
+                    id: `msg_${Date.now()}`,
+                    senderId: userStore.currentUser.id,
+                    senderName: userStore.currentUser.nickname,
+                    senderAvatar: userStore.currentUser.avatar || '/default-avatar.png',
+                    content,
+                    type,
+                    timestamp: Date.now(),
+                    chatId: this.selectedChatId,
+                    chatType: this.selectedChatType,
+                    isRead: false
+                }
+                
+                if (!this.messages[this.selectedChatId]) {
+                    this.messages[this.selectedChatId] = []
+                }
+                this.messages[this.selectedChatId].push(localMessage)
+                this.updateChatLastMessage(this.selectedChatId, localMessage)
+                
+                // 保存到本地存储
+                this.saveToStorage()
             }
-
-            if (!this.messages[this.selectedChatId]) {
-                this.messages[this.selectedChatId] = []
-            }
-            
-            this.messages[this.selectedChatId].push(message)
-            
-            // 更新聊天的最后消息时间
-            this.updateChatLastMessage(this.selectedChatId, message)
-            
-            // 模拟消息状态更新
-            setTimeout(() => {
-                message.status = 'delivered'
-            }, 1000)
-            
-            setTimeout(() => {
-                message.status = 'read'
-            }, 3000)
         },
         
         updateChatLastMessage(chatId: string, message: Message) {
@@ -293,157 +395,144 @@ export const useChatStore = defineStore('chat', {
             
             if (chat) {
                 chat.lastMessage = message
-                chat.updatedAt = message.timestamp
+                chat.updatedAt = Date.now()
             } else if (group) {
                 group.lastMessage = message
-                group.updatedAt = message.timestamp
+                group.updatedAt = Date.now()
             }
         },
         
-        deleteMessage(messageId: string) {
-            if (!this.selectedChatId) return
-            
-            const messages = this.messages[this.selectedChatId]
-            const index = messages.findIndex(msg => msg.id === messageId)
-            
-            if (index > -1) {
-                messages.splice(index, 1)
-            }
-        },
-        
-        addReaction(messageId: string, emoji: string) {
-            const userStore = useUserStore()
-            if (!this.selectedChatId || !userStore.currentUser) return
-            
-            const messages = this.messages[this.selectedChatId]
-            const message = messages.find(msg => msg.id === messageId)
-            
-            if (message) {
-                if (!message.reactions) {
-                    message.reactions = []
-                }
+        async deleteMessage(messageId: string) {
+            try {
+                await chatService.deleteMessage(messageId)
                 
-                const existingReaction = message.reactions.find(
-                    r => r.emoji === emoji && r.userId === userStore.currentUser!.id
-                )
+                // 从本地消息列表中删除
+                Object.keys(this.messages).forEach(chatId => {
+                    this.messages[chatId] = this.messages[chatId].filter(msg => msg.id !== messageId)
+                })
+            } catch (error) {
+                console.error('删除消息失败:', error)
+            }
+        },
+        
+        async addReaction(messageId: string, emoji: string) {
+            try {
+                const reaction = await chatService.addReaction(messageId, emoji)
                 
-                if (existingReaction) {
-                    // 移除反应
-                    message.reactions = message.reactions.filter(r => r !== existingReaction)
-                } else {
-                    // 添加反应
-                    message.reactions.push({
-                        emoji,
-                        userId: userStore.currentUser.id,
-                        timestamp: Date.now()
-                    })
-                }
-            }
-        },
-        
-        createGroup(name: string, description: string, participantIds: number[]) {
-            const userStore = useUserStore()
-            if (!userStore.currentUser) return null
-            
-            const group: Group = {
-                id: `group_${Date.now()}`,
-                name,
-                description,
-                avatar: '👥',
-                participants: [userStore.currentUser.id, ...participantIds],
-                admins: [userStore.currentUser.id],
-                owner: userStore.currentUser.id,
-                settings: {
-                    allowInvite: true,
-                    muteAll: false,
-                    showMemberCount: true
-                },
-                unreadCount: 0,
-                createdAt: Date.now(),
-                updatedAt: Date.now()
-            }
-            
-            this.groups.push(group)
-            this.messages[group.id] = []
-            
-            return group
-        },
-        
-        joinGroup(groupId: string) {
-            const userStore = useUserStore()
-            if (!userStore.currentUser) return false
-            
-            const group = this.groups.find(g => g.id === groupId)
-            if (group && !group.participants.includes(userStore.currentUser.id)) {
-                group.participants.push(userStore.currentUser.id)
-                return true
-            }
-            
-            return false
-        },
-        
-        leaveGroup(groupId: string) {
-            const userStore = useUserStore()
-            if (!userStore.currentUser) return false
-            
-            const group = this.groups.find(g => g.id === groupId)
-            if (group) {
-                const index = group.participants.indexOf(userStore.currentUser.id)
-                if (index > -1) {
-                    group.participants.splice(index, 1)
-                    
-                    // 如果是群主离开，转让群主
-                    if (group.owner === userStore.currentUser.id && group.participants.length > 0) {
-                        group.owner = group.participants[0]
-                        if (!group.admins.includes(group.owner)) {
-                            group.admins.push(group.owner)
+                // 更新本地消息的反应
+                Object.keys(this.messages).forEach(chatId => {
+                    const message = this.messages[chatId].find(msg => msg.id === messageId)
+                    if (message) {
+                        if (!message.reactions) {
+                            message.reactions = []
+                        }
+                        
+                        // 检查是否已经有相同的反应
+                        const existingReaction = message.reactions.find(r => r.emoji === emoji && r.userId === reaction.userId)
+                        if (!existingReaction) {
+                            message.reactions.push(reaction)
                         }
                     }
-                    
-                    return true
-                }
+                })
+            } catch (error) {
+                console.error('添加反应失败:', error)
             }
-            
-            return false
         },
         
-        setTyping(chatId: string, isTyping: boolean) {
+        async createGroup(name: string, description: string, participantIds: string[]) {
+            try {
+                const group = await chatService.createGroup({
+                    name,
+                    description,
+                    participantIds
+                })
+                
+                this.groups.push(group)
+                
+                // 保存到本地存储
+                this.saveToStorage()
+                
+                return group
+            } catch (error) {
+                console.error('创建群组失败:', error)
+                throw error
+            }
+        },
+        
+        async joinGroup(groupId: string) {
             const userStore = useUserStore()
             if (!userStore.currentUser) return
             
-            if (!this.typingUsers[chatId]) {
-                this.typingUsers[chatId] = []
-            }
-            
-            const typingList = this.typingUsers[chatId]
-            const userIndex = typingList.indexOf(userStore.currentUser.id)
-            
-            if (isTyping && userIndex === -1) {
-                typingList.push(userStore.currentUser.id)
-            } else if (!isTyping && userIndex > -1) {
-                typingList.splice(userIndex, 1)
+            try {
+                await chatService.joinGroup(groupId, userStore.currentUser.id)
+                
+                // 重新加载群组列表
+                const groups = await chatService.getGroups(userStore.currentUser.id)
+                this.groups = groups
+                
+                // 保存到本地存储
+                this.saveToStorage()
+            } catch (error) {
+                console.error('加入群组失败:', error)
             }
         },
         
-        clearChat(chatId: string) {
-            if (this.messages[chatId]) {
+        async leaveGroup(groupId: string) {
+            const userStore = useUserStore()
+            if (!userStore.currentUser) return
+            
+            try {
+                await chatService.leaveGroup(groupId, userStore.currentUser.id)
+                
+                // 从本地群组列表中移除
+                this.groups = this.groups.filter(g => g.id !== groupId)
+                
+                // 清理消息
+                delete this.messages[groupId]
+                
+                // 如果当前选中的是这个群组，清除选择
+                if (this.selectedChatId === groupId) {
+                    this.selectedChatId = null
+                }
+                
+                // 保存到本地存储
+                this.saveToStorage()
+            } catch (error) {
+                console.error('离开群组失败:', error)
+            }
+        },
+        
+        async setTyping(chatId: string, isTyping: boolean) {
+            const userStore = useUserStore()
+            if (!userStore.currentUser) return
+            
+            try {
+                await chatService.setTyping(chatId, userStore.currentUser.id, isTyping)
+            } catch (error) {
+                console.error('设置打字状态失败:', error)
+            }
+        },
+        
+        async clearChat(chatId: string) {
+            try {
+                await chatService.clearChat(chatId)
                 this.messages[chatId] = []
+                
+                // 保存到本地存储
+                this.saveToStorage()
+            } catch (error) {
+                console.error('清空聊天失败:', error)
             }
         },
         
-        searchMessages(query: string, chatId?: string) {
-            const searchIn = chatId ? [chatId] : Object.keys(this.messages)
-            const results: Message[] = []
-            
-            searchIn.forEach(id => {
-                const messages = this.messages[id] || []
-                const matches = messages.filter(msg => 
-                    msg.content.toLowerCase().includes(query.toLowerCase())
-                )
-                results.push(...matches)
-            })
-            
-            return results.sort((a, b) => b.timestamp - a.timestamp)
+        async searchMessages(query: string, chatId?: string) {
+            try {
+                const messages = await chatService.searchMessages(query, chatId)
+                return messages
+            } catch (error) {
+                console.error('搜索消息失败:', error)
+                return []
+            }
         }
     }
 })

@@ -131,38 +131,28 @@
 
       <!-- 房间内容 -->
       <div v-show="activeTab === 'rooms'" class="tab-content">
-        <el-button
-            type="primary"
-            :icon="Plus"
-            @click="createRoom"
-            class="add-btn"
-        >
-          创建房间
-        </el-button>
-
-        <div class="room-list">
-          <div
-              v-for="room in roomStore.rooms"
-              :key="room.id"
-              class="room-item"
-              @click="joinRoom(room)"
+        <div class="room-header-actions">
+          <el-button
+              type="primary"
+              :icon="Plus"
+              @click="createRoom"
+              class="add-btn"
           >
-            <div class="room-header">
-              <span class="room-name">{{ room.name }}</span>
-              <el-tag
-                  v-if="room.active"
-                  size="small"
-                  type="success"
-              >
-                进行中
-              </el-tag>
-            </div>
-            <div class="room-info">
-              <span>创建者：{{ room.creator }}</span>
-              <span>{{ room.participants }} 位参与者</span>
-            </div>
-          </div>
+            创建房间
+          </el-button>
         </div>
+
+        <RoomList
+            :rooms="roomStore.rooms"
+            :loading="roomStore.isLoading"
+            @select-room="selectRoom"
+            @join-room="joinRoom"
+            @leave-room="leaveRoom"
+            @edit-room="editRoom"
+            @delete-room="deleteRoom"
+            @copy-room-link="copyRoomLink"
+            @create-room="createRoom"
+        />
       </div>
     </div>
 
@@ -200,6 +190,7 @@ import { useRoomStore } from '@/stores/room'
 import ProfileModal from '@/components/Modals/ProfileModal.vue'
 import AddFriendModal from '@/components/Modals/AddFriendModal.vue'
 import CreateGroupModal from '@/components/Modals/CreateGroupModal.vue'
+import RoomList from '@/components/room/RoomList.vue'
 import type { User, Room, Group } from '@/types'
 
 const router = useRouter()
@@ -295,9 +286,59 @@ const createRoom = () => {
   }).catch(() => {})
 }
 
-const joinRoom = (room: Room) => {
+const selectRoom = (room: Room) => {
   roomStore.selectRoom(room)
-  ElMessage.success(`已进入房间：${room.name}`)
+  router.push('/video-room')
+}
+
+const joinRoom = (room: Room) => {
+  roomStore.joinRoom(room.id)
+  ElMessage.success(`已加入房间：${room.name}`)
+  router.push('/video-room')
+}
+
+const leaveRoom = (room: Room) => {
+  ElMessageBox.confirm(`确定要离开房间"${room.name}"吗？`, '提示', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).then(() => {
+    roomStore.leaveRoom(room.id)
+    ElMessage.success('已离开房间')
+  }).catch(() => {})
+}
+
+const editRoom = (room: Room) => {
+  ElMessageBox.prompt('请输入新的房间名称', '编辑房间', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    inputValue: room.name,
+    inputPattern: /\S+/,
+    inputErrorMessage: '房间名称不能为空'
+  }).then(({ value }) => {
+    // TODO: 实现编辑房间逻辑
+    ElMessage.success('房间信息已更新')
+  }).catch(() => {})
+}
+
+const deleteRoom = (room: Room) => {
+  ElMessageBox.confirm(`确定要删除房间"${room.name}"吗？此操作不可撤销。`, '警告', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'error'
+  }).then(() => {
+    // TODO: 实现删除房间逻辑
+    ElMessage.success('房间已删除')
+  }).catch(() => {})
+}
+
+const copyRoomLink = (room: Room) => {
+  const link = `${window.location.origin}/room/${room.id}`
+  navigator.clipboard.writeText(link).then(() => {
+    ElMessage.success('房间链接已复制到剪贴板')
+  }).catch(() => {
+    ElMessage.error('复制失败，请手动复制')
+  })
 }
 
 const handleLogout = () => {
@@ -317,11 +358,14 @@ const handleLogout = () => {
 .sidebar {
   width: 280px;
   height: 100vh;
-  background: #ffffff;
-  border-right: 1px solid #d2d2d7;
+  background: var(--glass-bg);
+  border-right: 1px solid var(--glass-border);
   display: flex;
   flex-direction: column;
   position: relative;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: var(--shadow-lg);
 }
 
 .sidebar::before {
@@ -346,8 +390,10 @@ const handleLogout = () => {
 
 .sidebar-header {
   padding: 20px;
-  background: #f5f5f7;
-  border-bottom: 1px solid #e5e5ea;
+  background: var(--surface-secondary);
+  border-bottom: 1px solid var(--glass-border);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 
 .sidebar-header::after {
@@ -368,11 +414,12 @@ const handleLogout = () => {
 }
 
 .app-title h2 {
-  font-size: 20px;
-  font-weight: 600;
-  color: #1d1d1f;
-  letter-spacing: -0.2px;
-  margin: 0 0 16px 0;
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+  color: var(--color-neutral-900);
+  letter-spacing: -0.05em;
+  margin: 0 0 var(--space-4) 0;
+  font-family: var(--font-display);
 }
 
 .user-info {
@@ -411,16 +458,20 @@ const handleLogout = () => {
 }
 
 .user-name {
-  font-weight: 600;
-  color: #1a1a1a;
-  margin-bottom: 4px;
-  font-size: 16px;
+  font-weight: var(--font-semibold);
+  color: var(--color-neutral-900);
+  margin-bottom: var(--space-1);
+  font-size: var(--text-base);
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
 }
 
 /* 简洁标签页样式 */
 .tab-container {
-  border-bottom: 1px solid #e5e5ea;
-  background: #ffffff;
+  border-bottom: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 
 .tab-buttons {
@@ -431,30 +482,33 @@ const handleLogout = () => {
 
 .tab-button {
   flex: 1;
-  padding: 12px 16px;
+  padding: var(--space-3) var(--space-4);
   border: none;
   background: transparent;
-  color: #86868b;
-  font-size: 14px;
-  font-weight: 400;
+  color: var(--color-neutral-500);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--duration-150) var(--ease-out);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--space-2);
   border-bottom: 2px solid transparent;
+  font-family: var(--font-primary);
+  letter-spacing: 0.01em;
 }
 
 .tab-button:hover:not(.active) {
-  color: #1d1d1f;
-  background: #f5f5f7;
+  color: var(--color-neutral-800);
+  background: var(--color-neutral-50);
 }
 
 .tab-button.active {
-  color: #007aff;
-  border-bottom-color: #007aff;
+  color: var(--color-primary-600);
+  border-bottom-color: var(--color-primary-600);
   background: transparent;
+  font-weight: var(--font-semibold);
 }
 
 .tab-button .el-icon {
@@ -466,7 +520,9 @@ const handleLogout = () => {
   flex: 1;
   overflow: hidden;
   position: relative;
-  background: rgba(248, 249, 250, 0.5);
+  background: transparent;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .tab-content {
@@ -526,13 +582,14 @@ const handleLogout = () => {
 }
 
 .section-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #8e8e93;
-  margin-bottom: 12px;
-  padding: 0 4px;
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--color-neutral-500);
+  margin-bottom: var(--space-3);
+  padding: 0 var(--space-1);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.1em;
+  font-family: var(--font-primary);
 }
 
 .friend-list,
@@ -638,16 +695,19 @@ const handleLogout = () => {
 }
 
 .chat-name {
-  font-weight: 600;
-  color: #1a1a1a;
-  margin-bottom: 4px;
-  font-size: 15px;
+  font-weight: var(--font-semibold);
+  color: var(--color-neutral-900);
+  margin-bottom: var(--space-1);
+  font-size: var(--text-base);
+  font-family: var(--font-primary);
+  letter-spacing: -0.01em;
 }
 
 .chat-message {
-  font-size: 13px;
-  color: #8e8e93;
-  font-weight: 400;
+  font-size: var(--text-sm);
+  color: var(--color-neutral-500);
+  font-weight: var(--font-normal);
+  line-height: var(--leading-snug);
 }
 
 .status-badge {

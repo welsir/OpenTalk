@@ -1,5 +1,6 @@
 package com.opentalk.domain.room.entity;
 
+import com.baomidou.mybatisplus.annotation.TableName;
 import com.opentalk.domain.room.entity.valueObject.GroupInfo;
 import com.opentalk.domain.room.entity.valueObject.GroupStatus;
 import com.opentalk.domain.room.entity.valueObject.MemberInfo;
@@ -16,6 +17,7 @@ import java.util.ArrayList;
  */
 @Data
 @Slf4j
+@TableName("group_room")
 public class GroupRoom extends BaseRoom{
 
     private String groupName;
